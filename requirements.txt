@@ -1,0 +1,8 @@
+streamlit==1.40.2
+requests==2.32.3
+pillow==10.4.0
+openpyxl==3.1.5
+defusedxml==0.7.1
+reportlab==4.2.5
+arabic-reshaper==3.0.0
+python-bidi==0.4.2

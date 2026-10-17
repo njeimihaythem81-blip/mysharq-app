@@ -1,0 +1,66 @@
+# Place this file in the PRIVATE data repo (mysharq-data) at .github/workflows/reminder.yml
+# Daily alert (ntfy and/or e-mail) when orders older than N days are not exported yet.
+# Repo secrets (Settings > Secrets and variables > Actions): NTFY_TOPIC and/or EMAIL_USER + EMAIL_APP_PASSWORD + EMAIL_TO
+# Uses no third-party actions (nothing to pin) and read-only permissions.
+name: Export reminder
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check old orders and notify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.parse
+          from datetime import datetime, timezone
+          api = "https://api.github.com/repos/" + os.environ["REPO"] + "/contents/"
+          def get(path, raw=True):
+              req = urllib.request.Request(api + path, headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                    "Accept": "application/vnd.github.raw+json" if raw else "application/vnd.github+json"})
+              try:
+                  return urllib.request.urlopen(req, timeout=30).read()
+              except urllib.error.HTTPError as e:
+                  if e.code == 404:
+                      return None
+                  raise
+          settings = json.loads(get("settings.json") or b"{}")
+          days = int(settings.get("export_reminder_days", 9))
+          listing = get("orders", raw=False)
+          files = [f for f in json.loads(listing or b"[]") if f["name"].endswith(".json")]
+          pend = json.loads(get("exports/pending.json") or b"{}")
+          pending_ids = set(pend.get("order_ids", []))
+          now = datetime.now(timezone.utc); old = 0
+          for f in files:
+              o = json.loads(get(f["path"]))
+              if o["order_id"] in pending_ids:
+                  continue
+              age = (now - datetime.fromisoformat(o["created_at"].replace("Z", "+00:00"))).days
+              if age >= days:
+                  old += 1
+          print("old orders:", old)
+          if old:
+              text = "Reminder: %d order(s) are older than %d days and not exported yet. Open the app, export them, check the file, then delete." % (old, days)
+              if os.environ.get("NTFY_TOPIC"):
+                  req = urllib.request.Request("https://ntfy.sh/" + os.environ["NTFY_TOPIC"], data=text.encode("utf-8"),
+                                               headers={"Title": "Export reminder", "Priority": "high"})
+                  urllib.request.urlopen(req, timeout=20)
+              if os.environ.get("EMAIL_USER") and os.environ.get("EMAIL_APP_PASSWORD") and os.environ.get("EMAIL_TO"):
+                  import smtplib
+                  from email.message import EmailMessage
+                  m = EmailMessage(); m["Subject"] = "Export reminder"; m["From"] = os.environ["EMAIL_USER"]; m["To"] = os.environ["EMAIL_TO"]
+                  m.set_content(text)
+                  with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as sm:
+                      sm.login(os.environ["EMAIL_USER"], os.environ["EMAIL_APP_PASSWORD"]); sm.send_message(m)
+          PY

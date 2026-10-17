@@ -1,0 +1,15 @@
+[server]
+enableXsrfProtection = true
+enableCORS = true
+maxUploadSize = 15
+
+[client]
+showErrorDetails = "none"
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "dark"
+primaryColor = "#39ff14"

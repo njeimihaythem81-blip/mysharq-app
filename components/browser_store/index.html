@@ -1,0 +1,20 @@
+<!doctype html><html><body><script>
+// Minimal Streamlit custom component (no npm, no external scripts).
+// Reads/writes ONE localStorage key named "mysharq_<name>". Data is untrusted by the Python side.
+function send(type, data){ window.parent.postMessage(Object.assign({isStreamlitMessage:true, type:type}, data), "*"); }
+window.addEventListener("message", function(e){
+  if (!e.data || e.data.type !== "streamlit:render") return;
+  var a = e.data.args || {};
+  var n = a.name;
+  if (typeof n !== "string" || !/^[a-z_]{1,32}$/.test(n)) return;
+  var k = "mysharq_" + n, out = "";
+  try {
+    if (a.clear) { localStorage.removeItem(k); }
+    else if (typeof a.save === "string" && a.save.length < 200000) { localStorage.setItem(k, a.save); }
+    if (a.read) { out = localStorage.getItem(k) || ""; }
+  } catch (err) { out = ""; }
+  if (a.read) { send("streamlit:setComponentValue", {value: out, dataType: "json"}); }
+  send("streamlit:setFrameHeight", {height: 0});
+});
+send("streamlit:componentReady", {apiVersion: 1});
+</script></body></html>

@@ -1,0 +1,350 @@
+{
+  "categories": [
+    {
+      "order": 1,
+      "section": "IDE BOXES",
+      "branches": [
+        {
+          "name": "Small",
+          "sub_branches": []
+        },
+        {
+          "name": "Medium",
+          "sub_branches": []
+        },
+        {
+          "name": "Big",
+          "sub_branches": []
+        },
+        {
+          "name": "Cell",
+          "sub_branches": []
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "section": "TESYS",
+      "branches": [
+        {
+          "name": "CONTACTORS TO 60A 30KW",
+          "sub_branches": []
+        },
+        {
+          "name": "CONTACTORS D 37 TO 75KW",
+          "sub_branches": []
+        },
+        {
+          "name": "CONTACTORS F TO 400KW",
+          "sub_branches": []
+        },
+        {
+          "name": "CONTACTORS GIGA TO 400KW",
+          "sub_branches": []
+        },
+        {
+          "name": "CAP BANK CONTACTORS",
+          "sub_branches": []
+        },
+        {
+          "name": "OVERLOADS",
+          "sub_branches": [
+            "LRD",
+            "LR9D",
+            "LR9F"
+          ]
+        },
+        {
+          "name": "PNEUMATIC TIMERS",
+          "sub_branches": []
+        },
+        {
+          "name": "AUXILIARIES FOR CT",
+          "sub_branches": []
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "section": "ACTI 9",
+      "branches": [
+        {
+          "name": "1 POLE",
+          "sub_branches": []
+        },
+        {
+          "name": "2 POLES",
+          "sub_branches": []
+        },
+        {
+          "name": "3 POLES",
+          "sub_branches": []
+        },
+        {
+          "name": "4 POLES",
+          "sub_branches": []
+        },
+        {
+          "name": "IDPN",
+          "sub_branches": []
+        },
+        {
+          "name": "FUSE HOLDERS",
+          "sub_branches": []
+        },
+        {
+          "name": "TIMERS",
+          "sub_branches": []
+        },
+        {
+          "name": "LUTSH RELAYS",
+          "sub_branches": []
+        },
+        {
+          "name": "LAMPS RAIL",
+          "sub_branches": []
+        },
+        {
+          "name": "DIN METERS",
+          "sub_branches": []
+        },
+        {
+          "name": "RESIDUAL CURRENT DEVICES",
+          "sub_branches": [
+            "RCB",
+            "RCBO",
+            "RCBO 1P UK",
+            "VIGI NORMAL",
+            "VIGI DPN"
+          ]
+        },
+        {
+          "name": "AUXILIARYS",
+          "sub_branches": []
+        },
+        {
+          "name": "SILENT CONTACTORS",
+          "sub_branches": [
+            "1P CT",
+            "2P CT",
+            "3P CT",
+            "4P CT",
+            "AUXILIARI CT"
+          ]
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "section": "BUSBARS",
+      "branches": [
+        {
+          "name": "MULTI STAGE",
+          "sub_branches": []
+        },
+        {
+          "name": "PIN BUSBAR",
+          "sub_branches": []
+        }
+      ]
+    },
+    {
+      "order": 5,
+      "section": "MCCBS",
+      "branches": [
+        {
+          "name": "NSX 10 TO NSX 400",
+          "sub_branches": []
+        },
+        {
+          "name": "NSXM TO NSXM 160",
+          "sub_branches": []
+        },
+        {
+          "name": "NS 800 TO 2500",
+          "sub_branches": []
+        }
+      ]
+    },
+    {
+      "order": 6,
+      "section": "ACB (AIR CIRCUIT BREAKERS)",
+      "branches": [
+        {
+          "name": "MTZ 1 TO 2500",
+          "sub_branches": []
+        },
+        {
+          "name": "MTZ2 TO 6300",
+          "sub_branches": []
+        },
+        {
+          "name": "ENW TO 3200",
+          "sub_branches": []
+        }
+      ]
+    },
+    {
+      "order": 7,
+      "section": "HARMONY",
+      "branches": [
+        {
+          "name": "PUSH BUTTONS",
+          "sub_branches": []
+        },
+        {
+          "name": "SIGNAL LAMPS",
+          "sub_branches": []
+        },
+        {
+          "name": "SELECTORS",
+          "sub_branches": []
+        },
+        {
+          "name": "CAM SWITCHES",
+          "sub_branches": []
+        }
+      ]
+    },
+    {
+      "order": 8,
+      "section": "ALTIVAR",
+      "branches": [
+        {
+          "name": "ALTIVAR 12",
+          "sub_branches": []
+        },
+        {
+          "name": "ALTIVAR 320",
+          "sub_branches": []
+        },
+        {
+          "name": "ALTIVAR 630",
+          "sub_branches": []
+        },
+        {
+          "name": "ALTIVAR 930",
+          "sub_branches": []
+        }
+      ]
+    },
+    {
+      "order": 9,
+      "section": "SOFT START",
+      "branches": [
+        {
+          "name": "ATS 01",
+          "sub_branches": []
+        },
+        {
+          "name": "ATS 480",
+          "sub_branches": []
+        }
+      ]
+    },
+    {
+      "order": 10,
+      "section": "BUSBARS FR",
+      "branches": []
+    },
+    {
+      "order": 11,
+      "section": "EARTHING SYSTEMS",
+      "branches": [
+        {
+          "name": "RAYCHEM",
+          "sub_branches": []
+        },
+        {
+          "name": "TUR",
+          "sub_branches": []
+        }
+      ]
+    },
+    {
+      "order": 12,
+      "section": "TRUNK",
+      "branches": []
+    },
+    {
+      "order": 13,
+      "section": "ZELIO",
+      "branches": [
+        {
+          "name": "PLC SMART RELAY",
+          "sub_branches": []
+        },
+        {
+          "name": "ZELIO PLUG IN RELAYS",
+          "sub_branches": []
+        },
+        {
+          "name": "ZELIO TIMERS",
+          "sub_branches": []
+        },
+        {
+          "name": "ZELIO PHASE PROTECTION",
+          "sub_branches": []
+        },
+        {
+          "name": "ZELIO LEVEL LIQUID",
+          "sub_branches": []
+        },
+        {
+          "name": "ZELIO TEMPERATURE CONTROL",
+          "sub_branches": []
+        }
+      ]
+    },
+    {
+      "order": 14,
+      "section": "MONITORS",
+      "branches": [
+        {
+          "name": "MULTIMETERS",
+          "sub_branches": []
+        },
+        {
+          "name": "CAPACITOR BANK CONTROL",
+          "sub_branches": []
+        },
+        {
+          "name": "CURRENT TRANSFORMERS",
+          "sub_branches": []
+        }
+      ]
+    },
+    {
+      "order": 15,
+      "section": "ATS, ATCBs AND MTS",
+      "branches": [
+        {
+          "name": "ATCBs AND MTS SCHNEIDER",
+          "sub_branches": [
+            "MTS",
+            "ENCLOSED MTS",
+            "ENCLOSED MTS WITH BUSBAR",
+            "MOTOR MECHANISM",
+            "ATCBs SCHNEIDER",
+            "ENCLOSED ATCBs SCHNEIDER WITHOUT CONTROL NOR BUSBAR",
+            "ENCLOSED ATCBs SCHNEIDER WITH CONTROL",
+            "ENCLOSED ATCBs SCHNEIDER WITH CONTROL AND BUSBAR"
+          ]
+        },
+        {
+          "name": "TELERGON",
+          "sub_branches": [
+            "MTS",
+            "ENCLOSED MTS",
+            "ENCLOSED MTS WITH BUSBAR",
+            "MOTOR MECHANISM",
+            "ATS",
+            "ENCLOSED ATS WITHOUT CONTROL NOR BUSBAR",
+            "ENCLOSED ATS WITH CONTROL",
+            "ENCLOSED ATS WITH CONTROL AND BUSBAR"
+          ]
+        }
+      ]
+    }
+  ]
+}
