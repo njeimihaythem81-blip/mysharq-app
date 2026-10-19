@@ -1,6 +1,4 @@
 """Chrome + neon-green industrial theme. Backgrounds are device-specific (media queries)."""
-import streamlit as st
-
 from core import store
 from core.validators import safe_html
 
@@ -16,13 +14,19 @@ def inject(settings):
         op = 0.76
     bgm = 'background-image:url("%s");' % safe_html(m) if m else ""
     bgd = 'background-image:url("%s");' % safe_html(d) if d else ""
-    st.markdown("""<style>
+    import streamlit as st
+    st.markdown(build_css(bgm, bgd, op), unsafe_allow_html=True)
+
+
+def build_css(bgm, bgd, op):
+    """Pure function (no Streamlit): the whole stylesheet. Uses tokens, NOT % formatting, because the CSS has literal % signs."""
+    css = """<style>
 #MainMenu, footer, [data-testid="stToolbar"], [data-testid="stDecoration"], .stDeployButton, [data-testid="stStatusWidget"]{display:none !important}
 header[data-testid="stHeader"]{background:transparent}
 .stApp,[data-testid="stAppViewContainer"]{background-color:#0b1013;background-size:cover;background-position:center;background-repeat:no-repeat}
-@media (max-width:768px){[data-testid="stAppViewContainer"]{%s}}
-@media (min-width:769px){[data-testid="stAppViewContainer"]{%s}}
-[data-testid="stAppViewContainer"]::before{content:"";position:fixed;inset:0;background:rgba(7,11,13,%.2f);pointer-events:none;z-index:0}
+@media (max-width:768px){[data-testid="stAppViewContainer"]{__BGM__}}
+@media (min-width:769px){[data-testid="stAppViewContainer"]{__BGD__}}
+[data-testid="stAppViewContainer"]::before{content:"";position:fixed;inset:0;background:rgba(7,11,13,__OP__);pointer-events:none;z-index:0}
 .block-container,[data-testid="stMainBlockContainer"]{max-width:720px;position:relative;z-index:1;background:rgba(36,44,48,.62);
  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(200,210,215,.35);border-radius:14px;
  padding:1.2rem 1rem 6rem 1rem;margin-top:.8rem}
@@ -60,4 +64,5 @@ h1,h2,h3,h4{color:#39ff14 !important}
 .tph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#2a3236;color:#8a979c;font-size:2.2rem;font-weight:800}
 [class*="st-key-tbtn_"] button{min-height:44px;height:auto;white-space:normal;line-height:1.2;padding:.4rem .3rem}
 [class*="st-key-tbtn_"] button::after{content:"";position:absolute;inset:0;border-radius:12px}
-</style>""" % (bgm, bgd, op), unsafe_allow_html=True)
+</style>"""
+    return css.replace("__BGM__", bgm).replace("__BGD__", bgd).replace("__OP__", "%.2f" % op)

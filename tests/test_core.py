@@ -341,6 +341,15 @@ class V2(unittest.TestCase):
         self.assertFalse(auth.check_staff_key("k" * 24, "9.9.9.9"))                       # throttled after many wrong guesses
 
 
+class Theme(unittest.TestCase):
+    def test_css_builds_with_literal_percent_signs(self):
+        from ui import theme
+        css = theme.build_css('background-image:url("https://x/a%20b.jpg");', "", 0.76)
+        self.assertIn("width:100%;height:100%", css); self.assertIn("a%20b.jpg", css); self.assertIn("rgba(7,11,13,0.76)", css)
+        self.assertNotIn("__BGM__", css); self.assertNotIn("__BGD__", css); self.assertNotIn("__OP__", css)
+        self.assertTrue(css.startswith("<style>") and css.rstrip().endswith("</style>"))
+
+
 class Cfg(unittest.TestCase):
     def test_placeholders_refused(self):
         config.set_provider(dict(SECRETS, SESSION_SECRET="REPLACE-with-at-least-32-random-characters"))

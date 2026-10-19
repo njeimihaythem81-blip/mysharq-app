@@ -90,6 +90,7 @@ def public():
 
 
 BACKUP_KEEP = 10
+_BACKUP_SEQ = __import__("itertools").count(1)
 
 
 def save_catalog(items_list, cats, actor, action, backup=False, imgmap=None):
@@ -102,10 +103,10 @@ def save_catalog(items_list, cats, actor, action, backup=False, imgmap=None):
         prev = {"items": _read(ctx().data, "items.json", {"items": []})["items"],
                 "categories": _read(ctx().data, "categories.json", {"categories": categories()})["categories"],
                 "images": _read(ctx().data, "catimages.json", {"images": {}})["images"], "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-        import uuid
         now = time.time()
-        name = "%s%03d-%s_%s" % (time.strftime("%Y%m%d-%H%M%S", time.gmtime(now)), int(now * 1000) % 1000, uuid.uuid4().hex[:3],
-                                 "".join(c for c in action if c.isalnum() or c in "-_")[:20])
+        # timestamp (to the millisecond) + process-wide counter: names sort chronologically even within one millisecond
+        name = "%s%03d-%04d_%s" % (time.strftime("%Y%m%d-%H%M%S", time.gmtime(now)), int(now * 1000) % 1000, next(_BACKUP_SEQ) % 10000,
+                                   "".join(c for c in action if c.isalnum() or c in "-_")[:20])
         ch["backups/%s.json" % name] = _j(prev)
         old = sorted(f["name"] for f in ctx().data.list_dir("backups") if f["name"].endswith(".json"))
         for n in old[:max(0, len(old) + 1 - BACKUP_KEEP)]:
