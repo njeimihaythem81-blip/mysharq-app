@@ -73,6 +73,15 @@ def check_password(user, pw):
     return bool(usr) and verify_password(pw, usr["hash"])
 
 
+def check_staff_key(key, ip):
+    """Secret staff link. Constant-time compare, throttled per IP. A hidden door, not a lock:
+    the real lock is still the username/password."""
+    import hmac
+    if not key or not LIMITER.allow("staffkey:" + ip, 20, 600):
+        return False
+    return hmac.compare_digest(str(key), str(config.get("STAFF_KEY")))
+
+
 def setup_manager(code, pw, confirm, ip):
     """First run only. Needs SETUP_CODE; allowed only when manager.json is a real 404."""
     import hmac

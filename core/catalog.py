@@ -332,3 +332,226 @@ def apply_import(existing, report, mode, decisions, categories):
             merged[it["item_no"].upper()] = it
         new_items = list(merged.values())
     return new_items, norm_categories(cats), summary
+
+
+# ======================================================================= v2: images per level, items CRUD, Excel with 2 sheets
+import os as _os
+import re as _re
+
+SEP = "__"
+IMG_EXT = (".jpg", ".jpeg", ".png", ".webp")
+ZIP_MAX_FILES, ZIP_MAX_EACH, ZIP_MAX_TOTAL = 400, 6 * 1024 * 1024, 120 * 1024 * 1024
+
+
+def path_id(path):
+    """Stable key of a category path (case/space-insensitive)."""
+    return "\x1f".join(cat_norm(p) for p in path)
+
+
+def all_paths(categories):
+    out = []
+    for c in categories:
+        out.append((c["section"],))
+        for b in c.get("branches", []):
+            out.append((c["section"], b["name"]))
+            for s in b.get("sub_branches", []):
+                out.append((c["section"], b["name"], s))
+    return out
+
+
+def _san(name):
+    return _re.sub(r'[\\/:*?"<>|]', "-", str(name))
+
+
+def expected_filename(path):
+    return SEP.join(_san(p) for p in path) + ".jpg"
+
+
+def image_names_table(categories, imgmap=None):
+    """Rows for the 'expected image file names' list: Level, Section, Branch, Sub-Branch, File name, Has image."""
+    imgmap = imgmap or {}
+    rows = []
+    for p in all_paths(categories):
+        rows.append((("Section", "Branch", "Sub-Branch")[len(p) - 1], p[0], p[1] if len(p) > 1 else "",
+                     p[2] if len(p) > 2 else "", expected_filename(p), "yes" if path_id(p) in imgmap else "no"))
+    return rows
+
+
+def read_zip_images(data):
+    """-> (entries [(name, bytes)], errors). Hard limits against zip bombs; reads with a size cap."""
+    import io as _io
+    import zipfile as _zf
+    errs, out, total = [], [], 0
+    try:
+        z = _zf.ZipFile(_io.BytesIO(data))
+    except Exception:
+        return [], ["The file is not a valid ZIP."]
+    infos = z.infolist()
+    if len(infos) > ZIP_MAX_FILES * 2:
+        return [], ["The ZIP has too many files."]
+    for i in infos:
+        base = _os.path.basename(i.filename.replace("\\", "/"))
+        if i.is_dir() or not base or base.startswith(".") or "__MACOSX" in i.filename:
+            continue
+        if _os.path.splitext(base)[1].lower() not in IMG_EXT:
+            errs.append("Ignored (not an image): " + base); continue
+        with z.open(i) as f:
+            d = f.read(ZIP_MAX_EACH + 1)
+        if len(d) > ZIP_MAX_EACH:
+            errs.append("Too large (6 MB max): " + base); continue
+        total += len(d)
+        if total > ZIP_MAX_TOTAL:
+            errs.append("Total size limit reached; the rest was ignored."); break
+        out.append((base, d))
+        if len(out) >= ZIP_MAX_FILES:
+            errs.append("Only the first %d images were read." % ZIP_MAX_FILES); break
+    return out, errs
+
+
+def match_zip_images(entries, categories):
+    """-> (matched {path: bytes}, unmatched [names]). Names: SECTION.jpg, SECTION__BRANCH.jpg, SECTION__BRANCH__SUB.jpg."""
+    idx = {tuple(cat_norm(_san(p)) for p in path): path for path in all_paths(categories)}
+    matched, unmatched = {}, []
+    for name, data in entries:
+        stem = _os.path.splitext(name)[0]
+        key = tuple(cat_norm(x) for x in stem.split(SEP))
+        if key in idx:
+            matched[idx[key]] = data
+        else:
+            unmatched.append(name)
+    return matched, unmatched
+
+
+def remap_image_keys(imgmap, old_path, new_name):
+    """After renaming the node at old_path, keep its image (and its children's)."""
+    pos = len(old_path) - 1
+    old_id = path_id(old_path)
+    out = {}
+    for k, v in imgmap.items():
+        if k == old_id or k.startswith(old_id + "\x1f"):
+            parts = k.split("\x1f"); parts[pos] = cat_norm(new_name); k = "\x1f".join(parts)
+        out[k] = v
+    return out
+
+
+def drop_image_keys(imgmap, path):
+    """-> (new_map, removed_tokens) for the node and everything below it."""
+    pid = path_id(path)
+    keep, gone = {}, []
+    for k, v in imgmap.items():
+        if k == pid or k.startswith(pid + "\x1f"):
+            gone.append(v)
+        else:
+            keep[k] = v
+    return keep, [g for g in gone if g]
+
+
+# ---- Excel: second sheet "Categories"
+def parse_categories_sheet(data, filename):
+    """Paths from the optional 'Categories' sheet of an .xlsx (empty list if absent). Values only."""
+    import io as _io
+    if not (filename or "").lower().endswith(".xlsx"):
+        return []
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(_io.BytesIO(data), read_only=True, data_only=True)
+        if "Categories" not in wb.sheetnames:
+            return []
+        rows = list(wb["Categories"].iter_rows(values_only=True))
+    except Exception:
+        return []
+    if not rows:
+        return []
+    cols = {}
+    for i, h in enumerate(rows[0]):
+        k = _hdr(h)
+        if k in ("section", "branch", "sub_branch") and k not in cols:
+            cols[k] = i
+    if "section" not in cols:
+        return []
+    out = []
+    for r in rows[1:]:
+        g = lambda k: clean_text(_cell(r[cols[k]]) if k in cols and cols[k] < len(r) else "", 80)
+        s, b, sb = g("section"), g("branch"), g("sub_branch")
+        if s and not (sb and not b):
+            out.append(tuple(x for x in (s, b, sb) if x))
+    return out
+
+
+def merge_category_paths(categories, paths):
+    """Add missing nodes (appended at the end). Never deletes or reorders. -> (categories, added_count)."""
+    cats, added = norm_categories(categories), 0
+    for path in paths:
+        for lvl in range(1, len(path) + 1):
+            sub = tuple(path[:lvl])
+            existing = {path_id(p) for p in all_paths(cats)}
+            if path_id(sub) not in existing:
+                cats = cat_add(cats, sub[:-1] if lvl > 1 else (), sub[-1])
+                added += 1
+    return cats, added
+
+
+# ---- manual items
+def find_item(items, item_no):
+    n = clean_text(item_no, 80).upper()
+    return next((i for i in items if i["item_no"].upper() == n), None)
+
+
+def _check_path(categories, section, branch, sub):
+    if sub and not branch:
+        return "Choose a branch before a sub-branch."
+    look = _lookup(categories)
+    key = (cat_norm(section), cat_norm(branch), cat_norm(sub))
+    return None if key in look else "That Section / Branch / Sub-Branch does not exist."
+
+
+def item_add(items, item_no, description, qty, section, branch, sub, categories):
+    """-> (items, error). Item No is the unique key."""
+    no, desc = clean_text(item_no, 80), clean_text(description, 300)
+    if not no:
+        return items, "Item No is required."
+    if not desc:
+        return items, "Description is required."
+    try:
+        q = int(str(qty).strip() or 0)
+        assert 0 <= q <= 10_000_000
+    except Exception:
+        return items, "Quantity must be a whole number (0 or more)."
+    if find_item(items, no):
+        return items, "This Item No already exists."
+    err = _check_path(categories, section, branch, sub)
+    if err:
+        return items, err
+    look = _lookup(categories)
+    s, b, sb = look[(cat_norm(section), cat_norm(branch), cat_norm(sub))]
+    return items + [{"item_no": no, "description": desc, "section": s, "branch": b, "sub_branch": sb, "qty": q}], None
+
+
+def item_update(items, item_no, description, qty, section, branch, sub, categories):
+    it = find_item(items, item_no)
+    if not it:
+        return items, "Item not found."
+    desc = clean_text(description, 300)
+    if not desc:
+        return items, "Description is required."
+    try:
+        q = int(str(qty).strip() or 0)
+        assert 0 <= q <= 10_000_000
+    except Exception:
+        return items, "Quantity must be a whole number (0 or more)."
+    err = _check_path(categories, section, branch, sub)
+    if err:
+        return items, err
+    look = _lookup(categories)
+    s, b, sb = look[(cat_norm(section), cat_norm(branch), cat_norm(sub))]
+    out = [dict(i) for i in items]
+    for i in out:
+        if i["item_no"].upper() == it["item_no"].upper():
+            i.update(description=desc, qty=q, section=s, branch=b, sub_branch=sb)
+    return out, None
+
+
+def item_delete(items, item_no):
+    n = clean_text(item_no, 80).upper()
+    out = [i for i in items if i["item_no"].upper() != n]
+    return out, (None if len(out) < len(items) else "Item not found.")

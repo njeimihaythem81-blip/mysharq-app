@@ -17,7 +17,7 @@ from tests.fakegh import FakeRepo
 
 SEED = json.load(open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "seed", "categories.json")))["categories"]
 SECRETS = {"GITHUB_TOKEN_DATA": "t1", "GITHUB_TOKEN_IMAGES": "t2", "GITHUB_OWNER": "o", "IMAGES_REPO": "i", "DATA_REPO": "d",
-           "SESSION_SECRET": "s" * 40, "SETUP_CODE": "setup-code-123", "BRANCH": "main"}
+           "SESSION_SECRET": "s" * 40, "SETUP_CODE": "setup-code-123", "STAFF_KEY": "k" * 24, "BRANCH": "main"}
 ITEMS = [{"item_no": "LC1D09M7", "description": "Contactor 9A", "section": "TESYS", "branch": "CONTACTORS TO 60A 30KW", "sub_branch": "", "qty": 120},
          {"item_no": "LC1D80M7", "description": "Contactor 80A", "section": "TESYS", "branch": "CONTACTORS D 37 TO 75KW", "sub_branch": "", "qty": 0},
          {"item_no": "LRD08", "description": "Overload 2.5-4A", "section": "TESYS", "branch": "OVERLOADS", "sub_branch": "LRD", "qty": 60}]
@@ -57,6 +57,8 @@ class Validators(unittest.TestCase):
     def test_escape_and_formula(self):
         self.assertNotIn("<", safe_html("<script>alert(1)</script>"))
         self.assertNotIn("[", safe_html("[x](http://evil)"))
+        self.assertEqual(safe_html("MY SHARQ RFQ's"), "MY SHARQ RFQ&#x27;s")      # entity must stay intact
+        self.assertEqual(safe_html("A & B #1"), "A &amp; B &#35;1")
         for v in ("=HYPERLINK(\"x\")", "+1+1", "-2", "@SUM(1)", "\t=1"):
             self.assertTrue(neutralize_formula(v).startswith("'"), v)
         self.assertEqual(neutralize_formula("Ahmed"), "Ahmed")
@@ -251,11 +253,103 @@ class AuthAndPhotos(unittest.TestCase):
         self.assertLessEqual(len(imaging.process_background(raw(big, "PNG"), "mobile")), 300 * 1024)
 
 
+class V2(unittest.TestCase):
+    def setUp(self): self.data, self.imgs, self.sent = fresh()
+
+    def _zip(self, files):
+        import zipfile
+        b = io.BytesIO()
+        with zipfile.ZipFile(b, "w") as z:
+            for n, d in files.items(): z.writestr(n, d)
+        return b.getvalue()
+
+    def test_zip_matching_and_limits(self):
+        png = io.BytesIO(); Image.new("RGB", (50, 50), "red").save(png, "PNG"); png = png.getvalue()
+        z = self._zip({"TESYS.jpg": png, "folder/TESYS__OVERLOADS.png": png, "tesys__overloads__lrd.JPG": png,
+                       "__MACOSX/._TESYS.jpg": b"x", "readme.txt": b"hi", "Nothing.jpg": png, "TESYS__OVERLOADS__NOPE.jpg": png,
+                       "ACB (AIR CIRCUIT BREAKERS).jpg": png})
+        entries, errs = catalog.read_zip_images(z)
+        matched, unmatched = catalog.match_zip_images(entries, SEED)
+        self.assertEqual(set(matched), {("TESYS",), ("TESYS", "OVERLOADS"), ("TESYS", "OVERLOADS", "LRD"), ("ACB (AIR CIRCUIT BREAKERS)",)})
+        self.assertEqual(sorted(unmatched), ["Nothing.jpg", "TESYS__OVERLOADS__NOPE.jpg"])
+        self.assertTrue(any("readme.txt" in e for e in errs))
+        big = self._zip({"TESYS.jpg": b"\0" * (7 * 1024 * 1024)})                       # larger than 6 MB: skipped
+        self.assertEqual(catalog.read_zip_images(big)[0], []); self.assertTrue(catalog.read_zip_images(big)[1])
+        self.assertTrue(catalog.read_zip_images(b"not a zip")[1])
+        names = catalog.image_names_table(SEED); self.assertEqual(len(names), len(catalog.all_paths(SEED))); self.assertIn("TESYS__OVERLOADS__LRD.jpg", [n[4] for n in names])
+
+    def test_image_keys_follow_rename_and_delete(self):
+        m = {catalog.path_id(("TESYS",)): "t1", catalog.path_id(("TESYS", "OVERLOADS")): "t2", catalog.path_id(("ACTI 9",)): "t3"}
+        m2 = catalog.remap_image_keys(m, ("TESYS",), "TESYS NEW")
+        self.assertEqual(m2[catalog.path_id(("TESYS NEW", "OVERLOADS"))], "t2"); self.assertEqual(m2[catalog.path_id(("ACTI 9",))], "t3")
+        m3, gone = catalog.drop_image_keys(m2, ("TESYS NEW",)); self.assertEqual(sorted(gone), ["t1", "t2"]); self.assertEqual(list(m3.values()), ["t3"])
+
+    def test_category_images_end_to_end(self):
+        t, f = imaging.process_photo(self._jpg())
+        store.set_cat_images({("TESYS",): imaging.process_cat_image(self._jpg())}, "manager")
+        url = store.cat_image_url(("TESYS",)); self.assertIsNotNone(url); self.assertIn("/images/cat/", url)
+        self.assertIsNone(store.cat_image_url(("ACTI 9",)))
+        store.remove_cat_image(("TESYS",), "manager"); self.assertIsNone(store.cat_image_url(("TESYS",)))
+        self.assertFalse(any(p.startswith("images/cat/") for p in self.imgs.files))
+
+    def _jpg(self):
+        b = io.BytesIO(); Image.new("RGB", (900, 600), "blue").save(b, "JPEG"); return b.getvalue()
+
+    def test_categories_sheet_and_merge(self):
+        wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Items"; ws.append(["Section", "Branch", "Sub-Branch", "Item No", "Description", "Quantity"])
+        cs = wb.create_sheet("Categories"); cs.append(["Section", "Branch", "Sub-Branch"])
+        for r in (["NEW SEC", "", ""], ["NEW SEC", "B1", ""], ["NEW SEC", "B1", "S1"], ["TESYS", "OVERLOADS", ""], ["", "X", ""], ["NEW SEC", "", "ORPHAN"]): cs.append(r)
+        b = io.BytesIO(); wb.save(b)
+        paths = catalog.parse_categories_sheet(b.getvalue(), "f.xlsx")
+        self.assertEqual(paths, [("NEW SEC",), ("NEW SEC", "B1"), ("NEW SEC", "B1", "S1"), ("TESYS", "OVERLOADS")])
+        cats, added = catalog.merge_category_paths(SEED, paths)
+        self.assertEqual(added, 3); self.assertEqual(cats[-1]["section"], "NEW SEC"); self.assertEqual(cats[-1]["branches"][0]["sub_branches"], ["S1"])
+        self.assertEqual(len(cats), len(SEED) + 1)                      # nothing removed or reordered
+        self.assertEqual(catalog.merge_category_paths(cats, paths)[1], 0)
+
+    def test_manual_items(self):
+        it, err = catalog.item_add(ITEMS, "NEW1", "Desc", 5, "TESYS", "OVERLOADS", "LRD", SEED); self.assertIsNone(err); self.assertEqual(len(it), 4)
+        self.assertIsNotNone(catalog.item_add(it, "new1", "x", 1, "TESYS", "", "", SEED)[1])               # duplicate (case-insensitive)
+        self.assertIsNotNone(catalog.item_add(it, "N2", "x", 1, "NOPE", "", "", SEED)[1])                   # unknown category
+        self.assertIsNotNone(catalog.item_add(it, "N3", "x", -1, "TESYS", "", "", SEED)[1]); self.assertIsNotNone(catalog.item_add(it, "N4", "", 1, "TESYS", "", "", SEED)[1])
+        it2, err = catalog.item_update(it, "NEW1", "Changed", 0, "tesys", "", "", SEED); self.assertIsNone(err)
+        row = catalog.find_item(it2, "new1"); self.assertEqual((row["description"], row["qty"], row["section"], row["branch"]), ("Changed", 0, "TESYS", ""))
+        it3, err = catalog.item_delete(it2, "NEW1"); self.assertIsNone(err); self.assertEqual(len(it3), 3); self.assertIsNotNone(catalog.item_delete(it3, "NEW1")[1])
+
+    def test_backups_and_restore(self):
+        cats = catalog.norm_categories(SEED)
+        for i in range(13):
+            store.save_catalog(ITEMS[:1 + i % 3], cats, "manager", "import", backup=True)
+            self.data.n += 1
+            self.data.files.setdefault("x", b"")
+        names = store.list_backups(); self.assertEqual(len(names), store.BACKUP_KEEP)
+        store.save_catalog([], cats, "manager", "delete-all", backup=True)               # a bad action
+        newest = store.list_backups()[0]; self.assertIn("delete-all", newest)
+        self.assertEqual(len(store.read_backup(newest)["items"]), len(ITEMS[:1 + 12 % 3]))     # backup holds the state BEFORE
+        store.restore_backup(newest, "manager"); store.CACHE.invalidate("d:")
+        self.assertEqual(len(store.items()), len(ITEMS[:1 + 12 % 3]))
+        with self.assertRaises(GhError): store.read_backup("../items.json")
+
+    def test_items_workbook_and_staff_key(self):
+        data = docs.items_xlsx([dict(ITEMS[0], description="=evil()")], SEED, {})
+        wb = openpyxl.load_workbook(io.BytesIO(data)); self.assertEqual(wb.sheetnames, ["Items", "Categories"])
+        self.assertEqual([c.value for c in wb["Items"][1]], ["Section", "Branch", "Sub-Branch", "Item No", "Description", "Quantity"])
+        self.assertTrue(wb["Items"]["E2"].value.startswith("'")); self.assertEqual(wb["Categories"].max_row, len(catalog.all_paths(SEED)) + 1)
+        rows, err = catalog.parse_items_file(data, "x.xlsx"); self.assertIsNone(err); self.assertEqual(rows[0]["item_no"], "LC1D09M7")    # round trip
+        self.assertTrue(auth.check_staff_key("k" * 24, "1.1.1.1")); self.assertFalse(auth.check_staff_key("wrong", "1.1.1.1")); self.assertFalse(auth.check_staff_key("", "1.1.1.1"))
+        for i in range(25): auth.check_staff_key("guess%d" % i, "9.9.9.9")
+        self.assertFalse(auth.check_staff_key("k" * 24, "9.9.9.9"))                       # throttled after many wrong guesses
+
+
 class Cfg(unittest.TestCase):
     def test_placeholders_refused(self):
         config.set_provider(dict(SECRETS, SESSION_SECRET="REPLACE-with-at-least-32-random-characters"))
         with self.assertRaises(config.ConfigError): config.validate()
         config.set_provider(dict(SECRETS, SESSION_SECRET="short"))
+        with self.assertRaises(config.ConfigError): config.validate()
+        config.set_provider(dict(SECRETS, STAFF_KEY="short")); 
+        with self.assertRaises(config.ConfigError): config.validate()
+        config.set_provider({k: v for k, v in SECRETS.items() if k != "STAFF_KEY"})
         with self.assertRaises(config.ConfigError): config.validate()
         config.set_provider(dict(SECRETS)); config.validate()
 

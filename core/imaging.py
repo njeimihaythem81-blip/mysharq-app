@@ -55,6 +55,11 @@ def process_photo(data):
     return _jpeg(_fit(im, (300, 300)), 78), _jpeg(_fit(im, (900, 900)), 82)
 
 
+def process_cat_image(data):
+    """Section / branch image for the customer tiles: one 400 px JPEG, metadata-free."""
+    return _jpeg(_fit(_open(data), (400, 400)), 80)
+
+
 def process_logo(data):
     im = _open(data)
     if im.height > 120:

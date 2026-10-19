@@ -105,24 +105,101 @@ def screen_operators(user, settings):
                     st.error("Enter your password first.")
 
 
-# ------------------------------------------------------------------ items import
+# ------------------------------------------------------------------ items
+def pick_path(prefix, cats, init=("", "", "")):
+    """Section / Branch / Sub-branch pickers fed from the category tree (no typing mistakes)."""
+    secs = [c["section"] for c in cats]
+    sec = st.selectbox("Section", secs, index=secs.index(init[0]) if init[0] in secs else 0, key=prefix + "_s")
+    sc = next(c for c in cats if c["section"] == sec)
+    brs = [""] + [b["name"] for b in sc["branches"]]
+    br = st.selectbox("Branch", brs, index=brs.index(init[1]) if init[1] in brs else 0, format_func=lambda x: x or "(none)", key=prefix + "_b")
+    subs = [""]
+    if br:
+        subs += next(b for b in sc["branches"] if b["name"] == br)["sub_branches"]
+    sb = st.selectbox("Sub-branch", subs, index=subs.index(init[2]) if init[2] in subs else 0, format_func=lambda x: x or "(none)", key=prefix + "_sb")
+    return sec, br, sb
+
+
 def screen_items(user, settings):
     st.header("Items")
     items = store.items(); pub = store.public()
     have = {i["key"] for i in pub["items"]} & store.images_index()["thumbs"]
     st.write("%d items · %d with photos · %d without" % (len(items), len(have), len(items) - len(have)))
-    try:
-        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates", "MY_SHARQ_Items_Template.xlsx"), "rb") as f:
-            st.download_button("Download the Excel template", f.read(), file_name="MY_SHARQ_Items_Template.xlsx", mime=XLSX)
-    except OSError:
-        pass
+    t_imp, t_add, t_edit, t_xl = st.tabs(["Import", "Add item", "Edit / delete", "Excel"])
+    with t_imp:
+        items_import(user, items)
+    with t_add:
+        cats = store.categories()
+        sec, br, sb = pick_path("add", cats)
+        with st.form("add_item", clear_on_submit=True):
+            no = st.text_input("Item No", max_chars=80)
+            desc = st.text_input("Description", max_chars=300)
+            qty = st.number_input("Quantity (stock)", 0, 10_000_000, 0)
+            if st.form_submit_button("Add item", use_container_width=True):
+                new, err = catalog.item_add(items, no, desc, qty, sec, br, sb, cats)
+                if err:
+                    st.error(err)
+                else:
+                    store.save_catalog(new, cats, "manager", "item-add"); st.success("Added. Prepare a new Excel file to include it.")
+    with t_edit:
+        items_edit(user, items)
+    with t_xl:
+        st.write("Download the full current list: sheet **Items** (6 columns) and sheet **Categories** (the tree, in order).")
+        st.caption("Edit this file, then upload it in Import with Merge. Always download the newest file before editing.")
+        if st.button("Prepare Excel file", key="xl_prep", use_container_width=True):
+            ss().items_xlsx = docs.items_xlsx(store.items(), store.categories(), store.catimages())
+        if ss().get("items_xlsx"):
+            st.download_button("Download items Excel", ss().items_xlsx, file_name="MySharq_Items.xlsx", mime=XLSX, use_container_width=True)
+        try:
+            with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates", "MY_SHARQ_Items_Template.xlsx"), "rb") as f:
+                st.download_button("Download the empty template", f.read(), file_name="MY_SHARQ_Items_Template.xlsx", mime=XLSX)
+        except OSError:
+            pass
+
+
+def items_edit(user, items):
+    from core.validators import item_key
+    cats = store.categories()
+    q = st.text_input("Find an item (number or words)", key="ei_q")
+    if not q.strip():
+        st.caption("Type part of the Item No or description."); return
+    hits = catalog.search(store.public(), q)[:30]
+    if not hits:
+        st.info("No match."); return
+    desc_of = {h["item_no"]: h["description"] for h in hits}
+    pick = st.selectbox("Item", [h["item_no"] for h in hits], format_func=lambda n: "%s - %s" % (n, desc_of[n][:60]), key="ei_pick")
+    it = catalog.find_item(items, pick)
+    if not it:
+        return
+    k = item_key(it["item_no"])
+    sec, br, sb = pick_path("ed_" + k, cats, (it["section"], it.get("branch", ""), it.get("sub_branch", "")))
+    desc = st.text_input("Description", it["description"], max_chars=300, key="ed_d_" + k)
+    qty = st.number_input("Quantity (stock)", 0, 10_000_000, int(it.get("qty", 0)), key="ed_q_" + k)
+    if st.button("Save changes", key="ed_save_" + k, use_container_width=True):
+        new, err = catalog.item_update(items, it["item_no"], desc, qty, sec, br, sb, cats)
+        if err:
+            st.error(err)
+        else:
+            store.save_catalog(new, cats, "manager", "item-edit"); st.success("Saved."); st.rerun()
+    st.markdown("---")
+    if reauth(user, "ed_ra_" + k) and st.button("Delete this item", key="del_item_" + k, use_container_width=True):
+        new, err = catalog.item_delete(items, it["item_no"])
+        if err:
+            st.error(err)
+        else:
+            store.save_catalog(new, cats, "manager", "item-delete", backup=True); st.success("Deleted (a backup was saved)."); st.rerun()
+
+
+def items_import(user, items):
     up = st.file_uploader("Upload items file (.xlsx or .csv)", type=["xlsx", "csv"], key="imp_file")
     if up is not None and st.button("Check file", key="imp_check"):
-        rows, err = catalog.parse_items_file(up.getvalue(), up.name)
+        data = up.getvalue()
+        rows, err = catalog.parse_items_file(data, up.name)
         if err:
             st.error(err); ss().pop("imp", None)
         else:
             ss().imp = catalog.validate_import(rows, store.categories())
+            ss().imp_cats = catalog.parse_categories_sheet(data, up.name)
     rep = ss().get("imp")
     if not rep:
         return
@@ -138,19 +215,24 @@ def screen_items(user, settings):
         opts = ["Create new category", "Skip these rows"] + ["Map to: " + " > ".join(x for x in s if x) for s in rep["suggest"].get(t, [])]
         ch = st.selectbox("Unknown category: %s (%d rows)" % (name, len(rws)), opts, key="unk_" + name)
         decisions[t] = "create" if ch == opts[0] else "skip" if ch == opts[1] else ("map", rep["suggest"][t][opts.index(ch) - 2])
-    mode = st.radio("Mode", ["Merge (add new, update existing)", "Replace all (delete items not in the file)"], key="imp_mode")
+    mode = st.radio("Mode", ["Merge (add new, update existing, keep the rest)", "Replace all (delete items not in the file)"], key="imp_mode")
+    replace = mode.startswith("Replace")
+    new_items, cats2, s = catalog.apply_import(items, rep, "replace" if replace else "merge", decisions, store.categories())
+    cats3, from_sheet = catalog.merge_category_paths(cats2, ss().get("imp_cats", []))
+    st.info(("If you save: add %(added)d · update %(updated)d · unchanged %(unchanged)d · skipped %(skipped)d · remove %(removed)d" % s)
+            + " · new categories: %d" % (from_sheet + len(cats2) - len(store.categories())))
+    st.caption("A backup of the current data is saved automatically before the import.")
     ok = True
-    if mode.startswith("Replace"):
+    if replace:
         st.error("Replace all removes every item that is not in this file.")
         ok = reauth(user, "imp_ra")
-    if ok and st.button("Save import", key="imp_save"):
-        new_items, cats, s = catalog.apply_import(items, rep, "replace" if mode.startswith("Replace") else "merge", decisions, store.categories())
-        store.save_catalog(new_items, cats, "manager", "import")
-        ss().pop("imp", None)
-        st.success("Added %(added)d · updated %(updated)d · unchanged %(unchanged)d · skipped %(skipped)d · removed %(removed)d" % s)
+    if ok and st.button("Save import", key="imp_save", use_container_width=True):
+        store.save_catalog(new_items, cats3, "manager", "import", backup=True)
+        ss().pop("imp", None); ss().pop("imp_cats", None)
+        st.success("Saved. Added %(added)d · updated %(updated)d · unchanged %(unchanged)d · skipped %(skipped)d · removed %(removed)d" % s)
 
 
-# ------------------------------------------------------------------ categories
+# ------------------------------------------------------------------ categories (+ images for every level)
 def screen_categories(user, settings):
     st.header("Categories")
     cats = copy.deepcopy(store.categories()); items = store.items()
@@ -165,7 +247,6 @@ def screen_categories(user, settings):
     s = next(c for c in cats if c["section"] == sec)
     br = st.selectbox("Branch", ["(none)"] + [b["name"] for b in s["branches"]], key="ce_b")
     path = (sec,)
-    sub = "(none)"
     if br != "(none)":
         path = (sec, br)
         b = next(x for x in s["branches"] if x["name"] == br)
@@ -173,6 +254,24 @@ def screen_categories(user, settings):
         if sub != "(none)":
             path = (sec, br, sub)
     st.caption("Selected: " + " > ".join(path))
+    cur = None
+    try:
+        cur = store.cat_image_url(path)
+    except Exception:
+        pass
+    if cur:
+        st.image(cur, width=140)
+    else:
+        st.caption("No image yet for this level.")
+    f = st.file_uploader("Image for this level (JPEG, PNG or WebP)", type=["jpg", "jpeg", "png", "webp"], key="ci_up_" + catalog.path_id(path))
+    c1, c2 = st.columns(2)
+    if f is not None and c1.button("Save image", key="ci_save", use_container_width=True):
+        try:
+            store.set_cat_images({path: imaging.process_cat_image(f.getvalue())}, "manager"); st.success("Saved. It appears within about a minute."); st.rerun()
+        except imaging.ImageRejected as e:
+            st.error(str(e))
+    if cur and c2.button("Remove image", key="del_ci", use_container_width=True):
+        store.remove_cat_image(path, "manager"); st.rerun()
     new = st.text_input("Name (for add or rename)", key="ce_name")
     c1, c2, c3, c4 = st.columns(4)
     try:
@@ -180,7 +279,8 @@ def screen_categories(user, settings):
             store.save_catalog(items, catalog.cat_add(cats, path, new), "manager", "category-add"); st.rerun()
         if c2.button("Rename", key="ce_ren"):
             cats2, items2 = catalog.cat_rename(cats, copy.deepcopy(items), path, new)
-            store.save_catalog(items2, cats2, "manager", "category-rename"); st.rerun()
+            store.save_catalog(items2, cats2, "manager", "category-rename", backup=True,
+                               imgmap=catalog.remap_image_keys(dict(store.catimages()), path, clean_text(new, 80))); st.rerun()
         if c3.button("Up", key="ce_up"):
             store.save_catalog(items, catalog.cat_move(cats, path, -1), "manager", "category-move"); st.rerun()
         if c4.button("Down", key="ce_dn"):
@@ -188,9 +288,46 @@ def screen_categories(user, settings):
         st.markdown("---")
         ok = reauth(user, "ce_ra")
         if ok and st.button("Delete selected", key="del_cat"):
-            store.save_catalog(items, catalog.cat_delete(cats, items, path), "manager", "category-delete"); st.rerun()
+            cats2 = catalog.cat_delete(cats, items, path)
+            store.save_catalog(items, cats2, "manager", "category-delete", backup=True)
+            store.remove_cat_image(path, "manager"); st.rerun()
     except ValueError as e:
         st.error(str(e))
+    category_images_zip(settings)
+
+
+def category_images_zip(settings):
+    st.markdown("---")
+    st.subheader("Images for all levels (ZIP)")
+    st.write("Name each image after its path, then put all images in one ZIP:  "
+             "`SECTION.jpg`, `SECTION__BRANCH.jpg`, `SECTION__BRANCH__SUB.jpg` (two underscores between levels).")
+    cats = store.categories()
+    rows = catalog.image_names_table(cats, store.catimages())
+    st.download_button("Download the list of image file names (Excel)", docs.simple_xlsx(
+        ["Level", "Section", "Branch", "Sub-Branch", "File name", "Has image"], rows), file_name="MySharq_Image_Names.xlsx", mime=XLSX)
+    z = st.file_uploader("ZIP of images", type=["zip"], key="ci_zip")
+    if z is not None and st.button("Check ZIP", key="ci_zip_check"):
+        entries, errs = catalog.read_zip_images(z.getvalue())
+        matched, unmatched = catalog.match_zip_images(entries, cats)
+        ss().ci_zip = {"matched": matched, "unmatched": unmatched, "errs": errs}
+    r = ss().get("ci_zip")
+    if r:
+        st.write("Matched images: **%d**" % len(r["matched"]))
+        if r["unmatched"]:
+            st.warning("Not matched (name does not fit any level): " + ", ".join(r["unmatched"][:30]) + (" ..." if len(r["unmatched"]) > 30 else ""))
+        for e in r["errs"][:10]:
+            st.caption(e)
+        if r["matched"] and st.button("Apply images", key="ci_zip_apply", use_container_width=True):
+            ready, bad = {}, []
+            for p, data in r["matched"].items():
+                try:
+                    ready[p] = imaging.process_cat_image(data)
+                except imaging.ImageRejected:
+                    bad.append(catalog.expected_filename(p))
+            if ready:
+                store.set_cat_images(ready, "manager")
+            ss().pop("ci_zip", None)
+            st.success("Applied %d image(s)." % len(ready) + ((" Rejected: " + ", ".join(bad)) if bad else ""))
 
 
 # ------------------------------------------------------------------ settings
@@ -296,6 +433,23 @@ def screen_backup(user, settings):
             z.writestr("settings.json", json.dumps(settings, ensure_ascii=False, indent=1))
             z.writestr("operators.json", json.dumps([{k: u[k] for k in ("username", "display", "active")} for u in store.users()], indent=1))
         st.download_button("Download backup (ZIP)", b.getvalue(), file_name="mysharq_backup.zip", mime="application/zip")
+    st.markdown("---")
+    st.subheader("Automatic backups")
+    st.caption("Saved automatically before every import, item delete, category rename or delete. The newest 10 are kept.")
+    names = store.list_backups()
+    if not names:
+        st.info("No automatic backups yet."); return
+    pick = st.selectbox("Backup", names, key="bk_pick")
+    try:
+        d = store.read_backup(pick)
+        st.write("Contains %d items and %d sections (saved %s)." % (len(d.get("items", [])), len(d.get("categories", [])), d.get("time", "")))
+    except GhError:
+        st.error("Could not read this backup."); return
+    st.warning("Restoring replaces the current items and categories with this backup. The current data is backed up first.")
+    if ok and st.button("Restore this backup", key="del_restore", use_container_width=True):
+        store.restore_backup(pick, "manager"); st.success("Restored."); st.rerun()
+    elif not ok:
+        st.caption("Enter your password above to enable restoring.")
 
 
 SCREENS = {"All Orders": screen_all_orders, "Operators": screen_operators, "Items": screen_items, "Categories": screen_categories,

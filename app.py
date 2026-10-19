@@ -36,9 +36,20 @@ if cfg_error:
 
 st.session_state.setdefault("view", "browse")
 
-
-def to_staff():
-    st.session_state.view = "staff"
+# Secret staff link: https://<app>/?k=<STAFF_KEY>. No button exists for customers. Wrong keys are ignored silently.
+_k = st.query_params.get("k")
+if _k:
+    from core import auth
+    from ui import common as _common
+    if auth.check_staff_key(_k, _common.client_ip()):
+        st.session_state.staff_ok = True
+        st.session_state.view = "staff"
+    try:
+        st.query_params.clear()   # remove the key from the address bar
+    except Exception:
+        pass
+if st.session_state.view == "staff" and not st.session_state.get("staff_ok"):
+    st.session_state.view = "browse"
 
 
 try:
@@ -48,7 +59,6 @@ try:
         customer.render(settings)
         from ui import common
         common.footer(settings)
-        st.button("Staff", key="to_staff", on_click=to_staff)
 except GhError:
     st.error("The service is temporarily unavailable. Please try again in a moment.")
 except Exception as e:  # never show stack traces; log only the type and a reference id

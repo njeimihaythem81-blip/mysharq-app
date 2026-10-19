@@ -2,7 +2,7 @@
 _provider = None  # tests inject a plain dict here
 
 REQUIRED = ["GITHUB_TOKEN_DATA", "GITHUB_TOKEN_IMAGES", "GITHUB_OWNER",
-            "IMAGES_REPO", "DATA_REPO", "SESSION_SECRET", "SETUP_CODE"]
+            "IMAGES_REPO", "DATA_REPO", "SESSION_SECRET", "SETUP_CODE", "STAFF_KEY"]
 _PLACEHOLDERS = ("REPLACE", "your-github", "xxxx", "changeme", "<")
 
 
@@ -34,6 +34,8 @@ def validate():
             bad.append(k)
     if len(str(get("SESSION_SECRET", "") or "")) < 32 and "SESSION_SECRET" not in bad:
         bad.append("SESSION_SECRET (needs 32+ characters)")
+    if len(str(get("STAFF_KEY", "") or "")) < 20 and "STAFF_KEY" not in bad:
+        bad.append("STAFF_KEY (needs 20+ characters)")
     if bad:
         raise ConfigError("Missing or placeholder secrets: " + ", ".join(bad))
 

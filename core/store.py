@@ -89,10 +89,79 @@ def public():
     return CACHE.get("d:public", 60, lambda: catalog.build_public(items(), categories()))
 
 
-def save_catalog(items_list, cats, actor, action):
-    ctx().data.commit_files({"items.json": _j({"items": items_list}), "categories.json": _j({"categories": cats})},
-                            "%s|%s|catalog" % (actor, action))
+BACKUP_KEEP = 10
+
+
+def save_catalog(items_list, cats, actor, action, backup=False, imgmap=None):
+    """Write items + categories (+ image map) in ONE commit. backup=True also stores the PREVIOUS state in
+    backups/ (newest 10 kept) inside the same commit, so a bad import or delete can be undone."""
+    ch = {"items.json": _j({"items": items_list}), "categories.json": _j({"categories": cats})}
+    if imgmap is not None:
+        ch["catimages.json"] = _j({"images": imgmap})
+    if backup:
+        prev = {"items": _read(ctx().data, "items.json", {"items": []})["items"],
+                "categories": _read(ctx().data, "categories.json", {"categories": categories()})["categories"],
+                "images": _read(ctx().data, "catimages.json", {"images": {}})["images"], "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+        import uuid
+        now = time.time()
+        name = "%s%03d-%s_%s" % (time.strftime("%Y%m%d-%H%M%S", time.gmtime(now)), int(now * 1000) % 1000, uuid.uuid4().hex[:3],
+                                 "".join(c for c in action if c.isalnum() or c in "-_")[:20])
+        ch["backups/%s.json" % name] = _j(prev)
+        old = sorted(f["name"] for f in ctx().data.list_dir("backups") if f["name"].endswith(".json"))
+        for n in old[:max(0, len(old) + 1 - BACKUP_KEEP)]:
+            ch["backups/" + n] = None
+    ctx().data.commit_files(ch, "%s|%s|catalog" % (actor, action))
     CACHE.invalidate("d:")
+
+
+def list_backups():
+    return sorted((f["name"] for f in ctx().data.list_dir("backups") if f["name"].endswith(".json")), reverse=True)
+
+
+def read_backup(name):
+    if "/" in name or ".." in name:
+        raise GhError("bad name")
+    return json.loads(ctx().data.get_file("backups/" + name)[0].decode("utf-8"))
+
+
+def restore_backup(name, actor):
+    b = read_backup(name)
+    save_catalog(b["items"], b["categories"], actor, "restore", backup=True, imgmap=b.get("images", {}))
+
+
+# ---- category images (section / branch / sub-branch tiles)
+def catimages():
+    return CACHE.get("d:catimages", 60, lambda: _read(ctx().data, "catimages.json", {"images": {}})["images"])
+
+
+def cat_image_url(path):
+    tok = catimages().get(catalog.path_id(path))
+    if tok and tok in images_index()["cats"]:
+        return cdn("images/cat/%s.jpg" % tok)
+    return None
+
+
+def set_cat_images(mapping, actor):
+    """mapping {path: jpeg bytes}. Files go to the PUBLIC images repo, the path->token map to the private repo."""
+    import uuid
+    imgmap = dict(catimages())
+    files = {}
+    for path, data in mapping.items():
+        pid = catalog.path_id(path)
+        tok = imgmap.get(pid) or uuid.uuid4().hex[:12]
+        imgmap[pid] = tok
+        files["images/cat/%s.jpg" % tok] = data
+    ctx().images.commit_files(files, "%s|catimages|%d" % (actor, len(files)))
+    ctx().data.commit_files({"catimages.json": _j({"images": imgmap})}, "%s|catimages|map" % actor)
+    CACHE.invalidate("i:"); CACHE.invalidate("d:catimages")
+
+
+def remove_cat_image(path, actor):
+    imgmap, gone = catalog.drop_image_keys(dict(catimages()), path)
+    if gone:
+        ctx().images.commit_files({"images/cat/%s.jpg" % t: None for t in gone}, "%s|catimages-remove|%d" % (actor, len(gone)))
+    ctx().data.commit_files({"catimages.json": _j({"images": imgmap})}, "%s|catimages-remove|map" % actor)
+    CACHE.invalidate("i:"); CACHE.invalidate("d:catimages")
 
 
 # ---------------------------------------------------------------- manager / users
@@ -270,10 +339,11 @@ def images_index(fresh=False):
         try:
             head, paths = ctx().images.tree_paths("")
         except (NotFound, Conflict):
-            return {"head": None, "thumbs": set(), "assets": set()}
+            return {"head": None, "thumbs": set(), "assets": set(), "cats": set()}
         thumbs = {p.split("/")[-1][:-4] for p, _ in paths if p.startswith("images/thumb/") and p.endswith(".jpg")}
         assets = {p.split("/")[-1] for p, _ in paths if p.startswith("assets/")}
-        return {"head": head, "thumbs": thumbs, "assets": assets}
+        cats = {p.split("/")[-1][:-4] for p, _ in paths if p.startswith("images/cat/") and p.endswith(".jpg")}
+        return {"head": head, "thumbs": thumbs, "assets": assets, "cats": cats}
     if fresh:
         CACHE.invalidate("i:")
     return CACHE.get("i:index", 60, load)

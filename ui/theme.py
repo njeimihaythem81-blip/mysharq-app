@@ -51,4 +51,13 @@ h1,h2,h3,h4{color:#39ff14 !important}
 .badge.ok{background:#0f3d12;color:#39ff14;border:1px solid #39ff14}
 .badge.wait{background:#3b2c05;color:#ffb300;border:1px solid #ffb300}
 .crumb{font-size:.85rem;color:#9fb0b5;margin:.3rem 0}
+.st-key-tilegrid{display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem}
+@media (min-width:769px){.st-key-tilegrid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+[class*="st-key-tile_"]{position:relative;background:rgba(20,26,29,.55);border:1px solid rgba(200,210,215,.3);border-radius:12px;padding:6px;gap:.35rem !important}
+[class*="st-key-tile_"] [data-testid="stMarkdownContainer"] p{margin:0}
+.timg{aspect-ratio:1/1;background:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.timg img{width:100%;height:100%;object-fit:contain}
+.tph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#2a3236;color:#8a979c;font-size:2.2rem;font-weight:800}
+[class*="st-key-tbtn_"] button{min-height:44px;height:auto;white-space:normal;line-height:1.2;padding:.4rem .3rem}
+[class*="st-key-tbtn_"] button::after{content:"";position:absolute;inset:0;border-radius:12px}
 </style>""" % (bgm, bgd, op), unsafe_allow_html=True)

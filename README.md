@@ -61,12 +61,13 @@ BRANCH        = "main"
 NTFY_TOPIC = "mysharq-k7q2x9m4tw8r3p5zv6nb"
 SESSION_SECRET = "<at least 32 random characters>"
 SETUP_CODE     = "<a random code only you know>"
+STAFF_KEY      = "<20+ random letters and digits: the secret of the staff link>"
 APP_URL        = "https://your-app.streamlit.app"
 ```
 Later edits: App > **Settings** > **Secrets**. The app refuses to start while any secret is missing or still a placeholder.
 
 ## 7. First run
-1. Open your app URL > bottom of the page > **Staff**. Because no Store Manager exists, you see "First-time setup".
+1. Open your **secret staff link**: `https://your-app.streamlit.app/?k=YOUR_STAFF_KEY`. (There is no Staff button on the public page.) Because no Store Manager exists, you see "First-time setup".
 2. Enter the **SETUP_CODE**, choose a strong password (12+ chars). Sign in as **manager**.
 3. **Settings**: store name, support number (shown in the footer as "Support:"), working hours, upload **logo**, **phone background** and **desktop background**, press **Send test alert**.
 4. **Items**: download the Excel template, fill it with your items (columns: Section, Branch, Sub-Branch, Item No, Description, Quantity), upload, **Check file**, read the report, **Save import**.
@@ -75,6 +76,14 @@ Later edits: App > **Settings** > **Secrets**. The app refuses to start while an
    Then `mysharq-data` > Settings > Secrets and variables > Actions > add `NTFY_TOPIC` (and/or the three `EMAIL_*` secrets). (GitHub pauses scheduled workflows after 60 days of no repo activity.)
 
 Recovery if you forget the manager password: in `mysharq-data` delete `manager.json`; the setup screen returns and again needs `SETUP_CODE`.
+
+## 7b. What is new in v2
+- **Staff entry:** only through the secret link above. Save it in your browser favourites / phone home screen. If it leaks, change `STAFF_KEY` in Secrets.
+- **Sections:** customers see image tiles (image + name; the whole tile opens the level) for every level: section, branch, sub-branch. No item counts.
+- **Images for all levels:** Manager > **Categories**: upload one image for the selected level, or one **ZIP** for all levels. Name files `SECTION.jpg`, `SECTION__BRANCH.jpg`, `SECTION__BRANCH__SUB.jpg` (use the Excel list of file names the app gives you).
+- **Items:** Manager > **Items**: Import (with a summary before saving, and an automatic backup), Add item, Edit / delete, and **Excel** (download the newest file with sheets Items + Categories).
+- **Rule:** the app is the master. Download the newest Excel from the app, edit it, upload it with **Merge**.
+- **Backups:** Manager > Backup > Automatic backups (newest 10, restorable).
 
 ## 8. Smoke test (10 minutes)
 1. Customer: open the app, search `lc1 d09-m7`, add to basket, send with name + `0912345678`. See the confirmation and download the PDF and Excel.

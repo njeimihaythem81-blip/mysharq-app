@@ -100,13 +100,16 @@ def neutralize_formula(v):
     return v
 
 
-_MD_SPECIAL = {c: "&#%d;" % ord(c) for c in "*_[]`$~#\\|{}!"}
+_MD_SPECIAL = set("*_[]`$~#\\|{}!")
 
 
 def safe_html(s):
-    """Escape for use inside st.markdown(unsafe_allow_html=True): HTML + Markdown special characters."""
-    out = html.escape(str(s), quote=True)
-    return "".join(_MD_SPECIAL.get(c, c) for c in out)
+    """Escape for use inside st.markdown(unsafe_allow_html=True): HTML + Markdown special characters.
+    One pass per character, so entities are never double-escaped."""
+    out = []
+    for c in str(s):
+        out.append("&#%d;" % ord(c) if c in _MD_SPECIAL else html.escape(c, quote=True))
+    return "".join(out)
 
 
 def new_order_id(now=None):

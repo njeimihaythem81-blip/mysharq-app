@@ -88,6 +88,38 @@ def export_xlsx(orders, tz="Africa/Tripoli"):
                   "Line Note", "Sales Operator"], rows, [18, 17, 24, 17, 22, 20, 50, 10, 26, 18], text_cols=(0, 3, 5))
 
 
+def items_xlsx(items, categories, imgmap=None):
+    """The 'source file': sheet Items (6 columns) + sheet Categories (tree in order, with the expected image file name)."""
+    from . import catalog
+    wb = Workbook()
+    ws = wb.active; ws.title = "Items"
+    ws.append(["Section", "Branch", "Sub-Branch", "Item No", "Description", "Quantity"])
+    for i in items:
+        ws.append([neutralize_formula(i["section"]), neutralize_formula(i.get("branch", "")), neutralize_formula(i.get("sub_branch", "")),
+                   neutralize_formula(i["item_no"]), neutralize_formula(i["description"]), int(i.get("qty", 0))])
+    cs = wb.create_sheet("Categories")
+    cs.append(["Section", "Branch", "Sub-Branch", "Image file name", "Has image"])
+    imgmap = imgmap or {}
+    for p in catalog.all_paths(categories):
+        cs.append([neutralize_formula(p[0]), neutralize_formula(p[1] if len(p) > 1 else ""), neutralize_formula(p[2] if len(p) > 2 else ""),
+                   catalog.expected_filename(p), "yes" if catalog.path_id(p) in imgmap else "no"])
+    for sheet, widths in ((ws, [24, 30, 20, 20, 52, 11]), (cs, [24, 30, 20, 56, 11])):
+        for c in sheet[1]:
+            c.font, c.fill, c.border = _HF, _HFILL, _B
+            c.alignment = Alignment(horizontal="center", vertical="center")
+        for row in sheet.iter_rows(min_row=2):
+            for c in row:
+                c.font = Font(name="Arial", size=10)
+        for i, w in enumerate(widths):
+            sheet.column_dimensions[chr(65 + i)].width = w
+        sheet.freeze_panes = "A2"
+    for row in ws.iter_rows(min_row=2):
+        row[3].number_format = "@"
+    b = io.BytesIO()
+    wb.save(b)
+    return b.getvalue()
+
+
 def simple_xlsx(headers, rows):
     return _xlsx(headers, rows, [24] * len(headers))
 

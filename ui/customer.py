@@ -78,6 +78,19 @@ def card(it):
     c2.button("Add to basket", key="add_" + k, on_click=add, args=(it["item_no"], k), use_container_width=True)
 
 
+def tile(path, label):
+    """Image + name; the name button is the click target and (via CSS) the whole tile is clickable."""
+    try:
+        url = store.cat_image_url(path)
+    except Exception:
+        url = None
+    k = item_key("__".join(path))
+    img = '<img src="%s" loading="lazy" alt="">' % safe_html(url) if url else '<div class="tph">%s</div>' % safe_html(label[:2].upper())
+    with st.container(key="tile_" + k):
+        st.markdown('<div class="timg">%s</div>' % img, unsafe_allow_html=True)
+        st.button(label, key="tbtn_" + k, on_click=go, args=(path,), use_container_width=True)
+
+
 def item_list(lst):
     ss = _ss(); total = len(lst); pages = max(1, (total + PAGE - 1) // PAGE)
     ss.page = min(ss.page, pages - 1)
@@ -110,14 +123,14 @@ def browse(cat):
         st.markdown('<div class="crumb">Home › %s</div>' % " › ".join(safe_html(p) for p in path), unsafe_allow_html=True)
         st.subheader(path[-1])
     else:
-        st.subheader("Product families")
+        st.subheader("Sections")
     names = catalog.children(cat, path)
     if not cat["items"]:
         st.info("The catalogue is being prepared. Please check back soon.")
-    cols = st.columns(2)
-    for i, n in enumerate(names):
-        cnt = cat["counts"].get(path + (n,), 0)
-        cols[i % 2].button("%s (%d)" % (n, cnt), key="cat_%d_%s" % (len(path), item_key(n)), on_click=go, args=(path + (n,),), use_container_width=True)
+    if names:
+        with st.container(key="tilegrid"):
+            for n in names:
+                tile(path + (n,), n)
     if path:
         lst = cat["level"].get(path, [])
         if lst:
