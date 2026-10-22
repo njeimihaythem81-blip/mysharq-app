@@ -7,7 +7,7 @@ import streamlit as st
 from core import auth, catalog, docs, imaging, orders, store
 from core.ghstore import GhError
 from core.validators import display_phone, item_key, safe_html, search_norm
-from . import common
+from . import common, livesearch
 
 OP_MENU = ["Orders", "My Orders", "Photos", "Leaderboard", "Account"]
 MGR_MENU = ["All Orders", "Operators", "Items", "Categories", "Settings", "Export", "Backup", "Photos", "Leaderboard", "Activity", "Account"]
@@ -215,7 +215,12 @@ def screen_photos(user, settings):
                     st.error("Could not save the photo right now. Please try again.")
         st.button("Back to list", key="photo_back", on_click=pick, args=(None,))
         return
-    q = st.text_input("Item number", placeholder="Search by item number", key="photo_q")
+    sel = livesearch.item_search(pub["payload"], key="ls_photos", placeholder="Type an item number")
+    chosen = livesearch.new_selection("ls_photos", sel)
+    if chosen and chosen in pub["by_no"]:
+        ss().photo_item = chosen
+        st.rerun()
+    q = st.text_input("Or search by words", placeholder="Search by description", key="photo_q")
     only = st.checkbox("Only items without a photo", value=True, key="photo_only")
     pool = catalog.search(pub, q) if q.strip() else pub["items"]
     if only:

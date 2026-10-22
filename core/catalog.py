@@ -43,7 +43,9 @@ def build_public(items, categories):
             subs = [s for s in b.get("sub_branches", []) if counts.get((c["section"], b["name"], s), 0) > 0]
             brs.append({"name": b["name"], "subs": subs})
         tree.append({"name": c["section"], "branches": brs})
-    return {"items": pub, "level": level, "counts": counts, "by_no": by_no, "index": index, "tree": tree}
+    payload = sorted(([d["item_no"], d["description"][:70], 1 if d["status"] == "Available" else 0] for d in pub),
+                     key=lambda r: (search_norm(r[0]), r[0]))
+    return {"items": pub, "level": level, "counts": counts, "by_no": by_no, "index": index, "tree": tree, "payload": payload}
 
 
 def children(cat, path):

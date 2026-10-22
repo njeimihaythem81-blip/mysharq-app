@@ -1,0 +1,91 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;padding:0;background:transparent;font-family:"Source Sans Pro",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#e8eef0}
+#q{box-sizing:border-box;width:100%;height:44px;padding:0 12px;font-size:16px;color:#e8eef0;background:rgba(20,26,29,.92);border:1px solid #8a979c;border-radius:10px;outline:none}
+#q:focus{border-color:#39ff14;box-shadow:0 0 8px rgba(57,255,20,.5)}
+#q::placeholder{color:#8a979c}
+#box{display:none;margin-top:6px}
+#list{max-height:276px;overflow-y:auto;border:1px solid rgba(200,210,215,.35);border-radius:10px;background:rgba(14,19,21,.95)}
+.r{height:46px;box-sizing:border-box;padding:4px 10px;display:flex;flex-direction:column;justify-content:center;border-bottom:1px solid rgba(200,210,215,.15);cursor:pointer}
+.r:last-child{border-bottom:none}.r.hi,.r:hover{background:rgba(57,255,20,.14)}
+.l1{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.no{font-weight:700;color:#39ff14;font-size:14px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds{font-size:12px;color:#c4ced2;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.b{font-size:10.5px;font-weight:700;padding:0 7px;border-radius:9px;white-space:nowrap}
+.ok{background:#0f3d12;color:#39ff14;border:1px solid #39ff14}.wt{background:#3b2c05;color:#ffb300;border:1px solid #ffb300}
+.none{padding:12px;color:#c4ced2;font-size:13px}
+#bar{display:flex;align-items:center;justify-content:space-between;margin-top:5px}
+#bar button{width:64px;height:34px;font-size:15px;color:#39ff14;background:linear-gradient(180deg,#2b3236,#11161a);border:1px solid #8a979c;border-radius:9px;cursor:pointer}
+#bar button:hover{box-shadow:0 0 8px rgba(57,255,20,.55)}
+#cnt{font-size:12px;color:#c4ced2}
+</style></head><body>
+<input id="q" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Item number">
+<div id="box"><div id="list"></div><div id="bar"><button id="up" title="Scroll up">&#9650;</button><span id="cnt"></span><button id="dn" title="Scroll down">&#9660;</button></div></div>
+<script src="matcher.js"></script>
+<script>
+(function () {
+  var rows = [], norm = [], res = [], hi = -1, selected = false, showStatus = true, ROW = 46, PAGE = 6;
+  var q = document.getElementById("q"), box = document.getElementById("box"), list = document.getElementById("list"), cnt = document.getElementById("cnt");
+  function send(type, data) { window.parent.postMessage(Object.assign({isStreamlitMessage: true, type: type}, data), "*"); }
+  function height() { send("streamlit:setFrameHeight", {height: Math.ceil(document.documentElement.scrollHeight) + 4}); }
+  function setValue(v) { send("streamlit:setComponentValue", {value: v, dataType: "json"}); }
+  function counter() {
+    if (!res.length) { cnt.textContent = ""; return; }
+    var first = Math.min(res.length, Math.floor(list.scrollTop / ROW) + 1);
+    var last = Math.min(res.length, first + PAGE - 1);
+    cnt.textContent = first + "-" + last + " of " + res.length;
+  }
+  function paint() {
+    list.textContent = "";
+    if (!q.value.trim() || selected) { box.style.display = "none"; height(); return; }
+    res = MATCH.search(norm, q.value, 300);
+    box.style.display = "block";
+    if (!res.length) {
+      var d = document.createElement("div"); d.className = "none"; d.textContent = "No item number matches these characters."; list.appendChild(d);
+    }
+    res.forEach(function (idx, k) {
+      var r = rows[idx], row = document.createElement("div"); row.className = "r" + (k === hi ? " hi" : "");
+      var l1 = document.createElement("div"); l1.className = "l1";
+      var no = document.createElement("span"); no.className = "no"; no.textContent = r[0]; l1.appendChild(no);
+      if (showStatus) { var b = document.createElement("span"); b.className = "b " + (r[2] ? "ok" : "wt"); b.textContent = r[2] ? "Available" : "Waiting"; l1.appendChild(b); }
+      var ds = document.createElement("div"); ds.className = "ds"; ds.textContent = r[1];
+      row.appendChild(l1); row.appendChild(ds);
+      row.addEventListener("mousedown", function (e) { e.preventDefault(); choose(k); });
+      list.appendChild(row);
+    });
+    list.scrollTop = 0;           // the list always returns to the top when the typed text changes
+    counter(); height();
+  }
+  function choose(k) {
+    var r = rows[res[k]]; if (!r) return;
+    q.value = r[0]; selected = true; hi = -1; paint();
+    setValue({item_no: r[0], n: Date.now()});
+  }
+  function mark() {
+    var kids = list.children;
+    for (var i = 0; i < kids.length; i++) kids[i].className = "r" + (i === hi ? " hi" : "");
+    if (kids[hi]) { var top = hi * ROW; if (top < list.scrollTop) list.scrollTop = top; else if (top + ROW > list.scrollTop + PAGE * ROW) list.scrollTop = top + ROW - PAGE * ROW; }
+    counter();
+  }
+  q.addEventListener("input", function () {
+    if (selected) { selected = false; setValue({item_no: null, n: Date.now()}); }
+    hi = -1; paint();
+  });
+  q.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowDown") { e.preventDefault(); if (res.length) { hi = Math.min(res.length - 1, hi + 1); mark(); } }
+    else if (e.key === "ArrowUp") { e.preventDefault(); if (res.length) { hi = Math.max(0, hi - 1); mark(); } }
+    else if (e.key === "Enter") { e.preventDefault(); if (res.length && !selected) choose(hi >= 0 ? hi : 0); }
+    else if (e.key === "Escape") { q.value = ""; selected = false; hi = -1; paint(); }
+  });
+  document.getElementById("up").addEventListener("click", function () { list.scrollBy({top: -PAGE * ROW, behavior: "smooth"}); });
+  document.getElementById("dn").addEventListener("click", function () { list.scrollBy({top: PAGE * ROW, behavior: "smooth"}); });
+  list.addEventListener("scroll", counter);
+  window.addEventListener("message", function (e) {
+    if (!e.data || e.data.type !== "streamlit:render") return;
+    var a = e.data.args || {}, nr = a.rows || [];
+    if (nr.length !== rows.length || (nr.length && (nr[0][0] !== rows[0][0] || nr[nr.length - 1][0] !== rows[rows.length - 1][0]))) { rows = nr; norm = MATCH.prepare(rows); }
+    showStatus = a.show_status !== false; q.placeholder = a.placeholder || "Item number";
+    if (!selected) paint(); else height();
+  });
+  send("streamlit:componentReady", {apiVersion: 1}); height();
+})();
+</script></body></html>

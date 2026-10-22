@@ -5,7 +5,7 @@ import streamlit as st
 
 from core import catalog, docs, orders, store
 from core.validators import item_key, parse_int, safe_html
-from . import common
+from . import common, livesearch
 
 PAGE = 24
 
@@ -30,8 +30,8 @@ def set_page(p):
     _ss().page = max(0, p)
 
 
-def add(item_no, k):
-    ss = _ss(); qty = parse_int(ss.get("q_" + k), 1, 9999, 1)
+def add(item_no, qkey):
+    ss = _ss(); qty = parse_int(ss.get(qkey), 1, 9999, 1)
     if item_no not in ss.basket and len(ss.basket) >= orders.MAX_LINES:
         st.toast("Basket is full (150 lines max)."); return
     cur = ss.basket.get(item_no, {"qty": 0, "note": ""})
@@ -63,7 +63,7 @@ def remove(item_no, k):
 
 
 # ------------------------------------------------------------------ pieces
-def card(it):
+def card(it, pfx=""):
     k = it["key"]
     try:
         url = store.thumb_url(k)
@@ -74,8 +74,8 @@ def card(it):
     st.markdown('<div class="it">%s<div><b>%s</b><br>%s<br>%s</div></div>' % (img, safe_html(it["item_no"]), safe_html(it["description"]), badge),
                 unsafe_allow_html=True)
     c1, c2 = st.columns([1, 2])
-    c1.number_input("Quantity", 1, 9999, 1, key="q_" + k, label_visibility="collapsed")
-    c2.button("Add to basket", key="add_" + k, on_click=add, args=(it["item_no"], k), use_container_width=True)
+    c1.number_input("Quantity", 1, 9999, 1, key=pfx + "q_" + k, label_visibility="collapsed")
+    c2.button("Add to basket", key=pfx + "add_" + k, on_click=add, args=(it["item_no"], pfx + "q_" + k), use_container_width=True)
 
 
 def tile(path, label):
@@ -105,6 +105,10 @@ def item_list(lst):
 
 def browse(cat):
     ss = _ss()
+    sel = livesearch.item_search(cat["payload"], key="ls_customer", placeholder="Type an item number")
+    picked = cat["by_no"].get(sel["item_no"]) if sel and sel.get("item_no") else None
+    if picked:
+        card(picked, "sel_")           # own widget keys: the same item may also appear in the list below
     q = st.text_input("Search", key="q", placeholder="Search by item number or description", label_visibility="collapsed")
     if ss.lastq != q:
         ss.lastq = q; ss.page = 0

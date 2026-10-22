@@ -14,7 +14,7 @@ from core import auth, catalog, docs, imaging, orders, store, notify
 from core.ghstore import GhError
 from core.security import FAILED_LOGINS
 from core.validators import clean_text, normalize_support, safe_html
-from . import common, staff
+from . import common, livesearch, staff
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -160,7 +160,11 @@ def screen_items(user, settings):
 def items_edit(user, items):
     from core.validators import item_key
     cats = store.categories()
-    q = st.text_input("Find an item (number or words)", key="ei_q")
+    sel = livesearch.item_search(store.public()["payload"], key="ls_edit", placeholder="Type an item number")
+    chosen = livesearch.new_selection("ls_edit", sel)
+    if chosen:
+        ss()["ei_q"] = chosen
+    q = st.text_input("Or find an item by words", key="ei_q")
     if not q.strip():
         st.caption("Type part of the Item No or description."); return
     hits = catalog.search(store.public(), q)[:30]

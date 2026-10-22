@@ -84,6 +84,7 @@ Recovery if you forget the manager password: in `mysharq-data` delete `manager.j
 - **Items:** Manager > **Items**: Import (with a summary before saving, and an automatic backup), Add item, Edit / delete, and **Excel** (download the newest file with sheets Items + Categories).
 - **Rule:** the app is the master. Download the newest Excel from the app, edit it, upload it with **Merge**.
 - **Backups:** Manager > Backup > Automatic backups (newest 10, restorable).
+- **Live item-number search** (customer page, Photos screen, Manager > Items > Edit/delete): type characters and a list of up to 6 matching items appears and updates with every key; arrows scroll the rest. Items whose number starts with the typed characters come first, then items that contain them.
 
 ## 8. Smoke test (10 minutes)
 1. Customer: open the app, search `lc1 d09-m7`, add to basket, send with name + `0912345678`. See the confirmation and download the PDF and Excel.
