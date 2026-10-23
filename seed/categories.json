@@ -5,20 +5,25 @@
       "section": "IDE BOXES",
       "branches": [
         {
-          "name": "Small",
+          "name": "STEEL DISTRIBUTION MODULAR CABINET",
+          "sub_branches": [
+            "2 ROWS 48-72 MOD",
+            "3 ROWS 72-96 MOD",
+            "4 ROWS 96-120 MOD",
+            "5 ROWS 120-168 MOD",
+            "6 ROWS 144-192 MOD"
+          ]
+        },
+        {
+          "name": "CELL",
           "sub_branches": []
         },
         {
-          "name": "Medium",
-          "sub_branches": []
-        },
-        {
-          "name": "Big",
-          "sub_branches": []
-        },
-        {
-          "name": "Cell",
-          "sub_branches": []
+          "name": "METAL ENCLOSURES AND CABINETS",
+          "sub_branches": [
+            "SMALL AND MEDIUM PANELS",
+            "MEDIUM THICK PANELS"
+          ]
         }
       ]
     },
@@ -29,6 +34,19 @@
         {
           "name": "CONTACTORS TO 60A 30KW",
           "sub_branches": []
+        },
+        {
+          "name": "MINI CONTACTORS K",
+          "sub_branches": [
+            "MINI CT 1K",
+            "REVERSING CT 2K"
+          ]
+        },
+        {
+          "name": "MINI CONTACTORS 1K",
+          "sub_branches": [
+            "MINI CT P1K"
+          ]
         },
         {
           "name": "CONTACTORS D 37 TO 75KW",
@@ -55,38 +73,147 @@
           ]
         },
         {
-          "name": "PNEUMATIC TIMERS",
+          "name": "AUXILIARIES FOR CT",
+          "sub_branches": [
+            "PNEUMATIC TIMERS",
+            "AUXILIARIES FOR CT"
+          ]
+        },
+        {
+          "name": "COIL FOR CONTACTOR",
+          "sub_branches": [
+            "COIL FOR CONTACTOR"
+          ]
+        },
+        {
+          "name": "MOTOR CIRCUIT BREAKER GV",
+          "sub_branches": [
+            "AUXILIARY ACCESS TRIP GV",
+            "MOTOR CIRCUIT BREAKER GV",
+            "MOTOR TRANSFORMER CB"
+          ]
+        },
+        {
+          "name": "EASYPACT TESYS",
+          "sub_branches": [
+            "MOTOR CIRCUIT BREAKER GZ",
+            "CONTACTORS TO 60A 30KW",
+            "AUXILIARIES FOR CT",
+            "OVERLOADS"
+          ]
+        },
+        {
+          "name": "TESYS U",
           "sub_branches": []
         },
         {
-          "name": "AUXILIARIES FOR CT",
+          "name": "CONTROL RELAYS",
+          "sub_branches": []
+        },
+        {
+          "name": "PRESSURE CONTROL",
+          "sub_branches": []
+        },
+        {
+          "name": "CAPACITOR BANK CONTROL",
           "sub_branches": []
         }
       ]
     },
     {
       "order": 3,
+      "section": "MISC AND ACCESSORIES",
+      "branches": [
+        {
+          "name": "TIES",
+          "sub_branches": [
+            "RAYCHEM RPG",
+            "SCHNEIDER"
+          ]
+        },
+        {
+          "name": "LUGS",
+          "sub_branches": [
+            "RAYCHEM RPG",
+            "SAFAK",
+            "SCHNEIDER",
+            "OTHER PRODUCERS"
+          ]
+        },
+        {
+          "name": "TRUNKING",
+          "sub_branches": [
+            "SCHNEIDER",
+            "OTHER PRODUCERS",
+            "PANEL PLA TRUNK"
+          ]
+        },
+        {
+          "name": "DUCTING SCHNEIDER",
+          "sub_branches": [
+            "SCHNEIDER"
+          ]
+        },
+        {
+          "name": "TERMINALS",
+          "sub_branches": [
+            "RAYCHEM RPG",
+            "SCHNEIDER",
+            "OTHER PRODUCERS",
+            "ONKA"
+          ]
+        },
+        {
+          "name": "EMBOUT WIRE BOOTLACE",
+          "sub_branches": [
+            "SCHNEIDER"
+          ]
+        },
+        {
+          "name": "HEAT SHRINK AND SLEEVES",
+          "sub_branches": [
+            "OTHER PRODUCERS"
+          ]
+        }
+      ]
+    },
+    {
+      "order": 4,
       "section": "ACTI 9",
       "branches": [
         {
           "name": "1 POLE",
-          "sub_branches": []
+          "sub_branches": [
+            "ACTI9 N CLASS",
+            "ACTI9 K CLASS"
+          ]
+        },
+        {
+          "name": "1 POLE AND NEUTRAL IDPN",
+          "sub_branches": [
+            "ACTI9 N CLASS"
+          ]
         },
         {
           "name": "2 POLES",
-          "sub_branches": []
+          "sub_branches": [
+            "ACTI9 K CLASS",
+            "C120 CLASS"
+          ]
         },
         {
           "name": "3 POLES",
-          "sub_branches": []
+          "sub_branches": [
+            "ACTI9 N CLASS",
+            "ACTI9 K CLASS",
+            "C120 CLASS"
+          ]
         },
         {
           "name": "4 POLES",
-          "sub_branches": []
-        },
-        {
-          "name": "IDPN",
-          "sub_branches": []
+          "sub_branches": [
+            "ACTI9 N CLASS"
+          ]
         },
         {
           "name": "FUSE HOLDERS",
@@ -113,7 +240,6 @@
           "sub_branches": [
             "RCB",
             "RCBO",
-            "RCBO 1P UK",
             "VIGI NORMAL",
             "VIGI DPN"
           ]
@@ -125,49 +251,102 @@
         {
           "name": "SILENT CONTACTORS",
           "sub_branches": [
-            "1P CT",
             "2P CT",
-            "3P CT",
-            "4P CT",
             "AUXILIARI CT"
           ]
-        }
-      ]
-    },
-    {
-      "order": 4,
-      "section": "BUSBARS",
-      "branches": [
-        {
-          "name": "MULTI STAGE",
-          "sub_branches": []
         },
         {
-          "name": "PIN BUSBAR",
+          "name": "CONTROL CIRCUIT BREAKERS",
           "sub_branches": []
         }
       ]
     },
     {
       "order": 5,
-      "section": "MCCBS",
+      "section": "HARMONY",
       "branches": [
         {
-          "name": "NSX 10 TO NSX 400",
-          "sub_branches": []
+          "name": "HARMONY A",
+          "sub_branches": [
+            "PUSH BUTTONS",
+            "STATION",
+            "HEAD",
+            "ACCESSORIES",
+            "SELECTORS",
+            "LED AUX",
+            "AUXILIARI H A",
+            "SIGNAL LAMPS"
+          ]
         },
         {
-          "name": "NSXM TO NSXM 160",
-          "sub_branches": []
-        },
-        {
-          "name": "NS 800 TO 2500",
-          "sub_branches": []
+          "name": "EASY HARMONY",
+          "sub_branches": [
+            "JOYSTICK",
+            "PUSH BUTTONS",
+            "SIGNAL LAMPS",
+            "SELECTORS"
+          ]
         }
       ]
     },
     {
       "order": 6,
+      "section": "RH TOROID RESIDUAL PROTECTION",
+      "branches": [
+        {
+          "name": "VIGIREX RELAY",
+          "sub_branches": []
+        },
+        {
+          "name": "TOROID",
+          "sub_branches": []
+        }
+      ]
+    },
+    {
+      "order": 7,
+      "section": "MCCBS",
+      "branches": [
+        {
+          "name": "NSX 10 TO NSX 400",
+          "sub_branches": [
+            "ACCESSORIES",
+            "BREAKERS AND FRAMES",
+            "TRIP UNITS"
+          ]
+        },
+        {
+          "name": "INS SECTIONNEUR",
+          "sub_branches": []
+        },
+        {
+          "name": "NSXM TO NSXM 160",
+          "sub_branches": [
+            "BREAKERS AND FRAMES"
+          ]
+        },
+        {
+          "name": "NS 800 TO 2500",
+          "sub_branches": [
+            "ACCESSORIES",
+            "BREAKERS AND FRAMES"
+          ]
+        },
+        {
+          "name": "EASYPACT MCCB",
+          "sub_branches": []
+        },
+        {
+          "name": "GOPACT",
+          "sub_branches": [
+            "ACCESSORIES",
+            "BREAKERS"
+          ]
+        }
+      ]
+    },
+    {
+      "order": 8,
       "section": "ACB (AIR CIRCUIT BREAKERS)",
       "branches": [
         {
@@ -179,35 +358,24 @@
           "sub_branches": []
         },
         {
-          "name": "ENW TO 3200",
+          "name": "MASTERPACT NW OM",
           "sub_branches": []
+        },
+        {
+          "name": "MASTERPACT NT OM",
+          "sub_branches": []
+        },
+        {
+          "name": "ACCESSORIES",
+          "sub_branches": [
+            "ELECTRICAL ADD ON",
+            "MECHANICAL ADD ON"
+          ]
         }
       ]
     },
     {
-      "order": 7,
-      "section": "HARMONY",
-      "branches": [
-        {
-          "name": "PUSH BUTTONS",
-          "sub_branches": []
-        },
-        {
-          "name": "SIGNAL LAMPS",
-          "sub_branches": []
-        },
-        {
-          "name": "SELECTORS",
-          "sub_branches": []
-        },
-        {
-          "name": "CAM SWITCHES",
-          "sub_branches": []
-        }
-      ]
-    },
-    {
-      "order": 8,
+      "order": 9,
       "section": "ALTIVAR",
       "branches": [
         {
@@ -225,11 +393,43 @@
         {
           "name": "ALTIVAR 930",
           "sub_branches": []
+        },
+        {
+          "name": "ACCESSORIES",
+          "sub_branches": []
+        },
+        {
+          "name": "ALTIVAR 11",
+          "sub_branches": []
+        },
+        {
+          "name": "ALTIVAR 21",
+          "sub_branches": []
+        },
+        {
+          "name": "ALTIVAR 31",
+          "sub_branches": []
+        },
+        {
+          "name": "ALTIVAR 312",
+          "sub_branches": []
+        },
+        {
+          "name": "ALTIVAR 61",
+          "sub_branches": []
+        },
+        {
+          "name": "ALTIVAR 71",
+          "sub_branches": []
+        },
+        {
+          "name": "OTHER DRIVES",
+          "sub_branches": []
         }
       ]
     },
     {
-      "order": 9,
+      "order": 10,
       "section": "SOFT START",
       "branches": [
         {
@@ -237,15 +437,18 @@
           "sub_branches": []
         },
         {
-          "name": "ATS 480",
+          "name": "ATS 480/490",
+          "sub_branches": []
+        },
+        {
+          "name": "ATS 22",
+          "sub_branches": []
+        },
+        {
+          "name": "ATS 48",
           "sub_branches": []
         }
       ]
-    },
-    {
-      "order": 10,
-      "section": "BUSBARS FR",
-      "branches": []
     },
     {
       "order": 11,
@@ -256,23 +459,26 @@
           "sub_branches": []
         },
         {
-          "name": "TUR",
+          "name": "OTHER SUPPLIERS",
+          "sub_branches": []
+        },
+        {
+          "name": "HRT",
           "sub_branches": []
         }
       ]
     },
     {
       "order": 12,
-      "section": "TRUNK",
-      "branches": []
-    },
-    {
-      "order": 13,
       "section": "ZELIO",
       "branches": [
         {
           "name": "PLC SMART RELAY",
-          "sub_branches": []
+          "sub_branches": [
+            "PRO CONTROLLER",
+            "ACCESSORIES",
+            "EXTENSIONS"
+          ]
         },
         {
           "name": "ZELIO PLUG IN RELAYS",
@@ -287,25 +493,17 @@
           "sub_branches": []
         },
         {
-          "name": "ZELIO LEVEL LIQUID",
-          "sub_branches": []
-        },
-        {
           "name": "ZELIO TEMPERATURE CONTROL",
           "sub_branches": []
         }
       ]
     },
     {
-      "order": 14,
+      "order": 13,
       "section": "MONITORS",
       "branches": [
         {
           "name": "MULTIMETERS",
-          "sub_branches": []
-        },
-        {
-          "name": "CAPACITOR BANK CONTROL",
           "sub_branches": []
         },
         {
@@ -315,20 +513,20 @@
       ]
     },
     {
-      "order": 15,
+      "order": 14,
       "section": "ATS, ATCBs AND MTS",
       "branches": [
         {
           "name": "ATCBs AND MTS SCHNEIDER",
           "sub_branches": [
             "MTS",
-            "ENCLOSED MTS",
-            "ENCLOSED MTS WITH BUSBAR",
-            "MOTOR MECHANISM",
-            "ATCBs SCHNEIDER",
-            "ENCLOSED ATCBs SCHNEIDER WITHOUT CONTROL NOR BUSBAR",
-            "ENCLOSED ATCBs SCHNEIDER WITH CONTROL",
-            "ENCLOSED ATCBs SCHNEIDER WITH CONTROL AND BUSBAR"
+            "ATCBs"
+          ]
+        },
+        {
+          "name": "ATS auto transfer switch SCHNEIDER",
+          "sub_branches": [
+            "TRANSFERPACT SCHNEIDER"
           ]
         },
         {
@@ -339,10 +537,112 @@
             "ENCLOSED MTS WITH BUSBAR",
             "MOTOR MECHANISM",
             "ATS",
-            "ENCLOSED ATS WITHOUT CONTROL NOR BUSBAR",
             "ENCLOSED ATS WITH CONTROL",
-            "ENCLOSED ATS WITH CONTROL AND BUSBAR"
+            "ENCLOSED ATS WITH BUSBAR",
+            "ACCESSORIES"
           ]
+        }
+      ]
+    },
+    {
+      "order": 15,
+      "section": "POWER SUPPLY 24VDC",
+      "branches": [
+        {
+          "name": "OMRON POWER SUPPLY",
+          "sub_branches": []
+        },
+        {
+          "name": "SCHNEIDER PHASEO POWER SUPPLY",
+          "sub_branches": []
+        }
+      ]
+    },
+    {
+      "order": 16,
+      "section": "INSULATION TRAFOS",
+      "branches": [
+        {
+          "name": "OTHER TRANSFORMERS",
+          "sub_branches": []
+        },
+        {
+          "name": "SCHNEIDER ABL6 INSULATION TRAFOS",
+          "sub_branches": []
+        }
+      ]
+    },
+    {
+      "order": 17,
+      "section": "BUSBARS",
+      "branches": [
+        {
+          "name": "COMB BUSBARS",
+          "sub_branches": []
+        },
+        {
+          "name": "CONNECTION ELEMENTS",
+          "sub_branches": [
+            "RADSAN"
+          ]
+        },
+        {
+          "name": "COPPER BARS",
+          "sub_branches": [
+            "GINDER"
+          ]
+        },
+        {
+          "name": "EARTH AND NEUTRAL BARS",
+          "sub_branches": []
+        },
+        {
+          "name": "INSULATORS",
+          "sub_branches": []
+        },
+        {
+          "name": "LINERGY",
+          "sub_branches": [
+            "SCHNEIDER"
+          ]
+        },
+        {
+          "name": "TERMINAL BLOCK",
+          "sub_branches": [
+            "SCHNEIDER"
+          ]
+        }
+      ]
+    },
+    {
+      "order": 18,
+      "section": "ENCLOSURES AND DISTRIBUTION BOXES",
+      "branches": [
+        {
+          "name": "PLASTIC ENCLOSURES AND JUNCTION BOXES",
+          "sub_branches": []
+        }
+      ]
+    },
+    {
+      "order": 19,
+      "section": "SWITCH DISCONNECTORS AND CHANGEOVER",
+      "branches": [
+        {
+          "name": "SWITCH DISCONNECTORS",
+          "sub_branches": [
+            "ACCESSORIES"
+          ]
+        }
+      ]
+    },
+    {
+      "order": 20,
+      "section": "SURGE PROTECTION",
+      "branches": [
+        {
+          "name": "SURGE ARRESTERS",
+          "sub_branches": []
         }
       ]
     }

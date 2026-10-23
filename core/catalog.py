@@ -557,3 +557,47 @@ def item_delete(items, item_no):
     n = clean_text(item_no, 80).upper()
     out = [i for i in items if i["item_no"].upper() != n]
     return out, (None if len(out) < len(items) else "Item not found.")
+
+
+# ======================================================================= replace the whole tree (from Excel)
+def tree_from_paths(paths):
+    """Build a category tree from ordered paths (rows of the Categories sheet). Parents are created when missing."""
+    cats, _ = merge_category_paths([], paths)
+    return cats
+
+
+def tree_stats(categories):
+    secs = len(categories)
+    brs = sum(len(c["branches"]) for c in categories)
+    subs = sum(len(b["sub_branches"]) for c in categories for b in c["branches"])
+    return secs, brs, subs
+
+
+def items_outside_tree(categories, items):
+    """Unique category paths used by items that do NOT exist in the given tree."""
+    ids = {path_id(p) for p in all_paths(categories)}
+    bad, seen = [], set()
+    for it in items:
+        path = tuple(x for x in (it["section"], it.get("branch", ""), it.get("sub_branch", "")) if x)
+        pid = path_id(path)
+        if pid not in ids and pid not in seen:
+            seen.add(pid); bad.append(path)
+    return bad
+
+
+def canonicalize_items(items, categories):
+    """Give every item the exact spelling of the new tree (e.g. different capital letters)."""
+    look = _lookup(categories)
+    out = []
+    for it in items:
+        key = (cat_norm(it["section"]), cat_norm(it.get("branch", "")), cat_norm(it.get("sub_branch", "")))
+        s, b, sb = look.get(key, (it["section"], it.get("branch", ""), it.get("sub_branch", "")))
+        out.append(dict(it, section=s, branch=b, sub_branch=sb))
+    return out
+
+
+def prune_image_keys(imgmap, categories):
+    """Keep only images whose level still exists. -> (new_map, removed_tokens)."""
+    ids = {path_id(p) for p in all_paths(categories)}
+    keep = {k: v for k, v in imgmap.items() if k in ids}
+    return keep, [v for k, v in imgmap.items() if k not in ids and v]

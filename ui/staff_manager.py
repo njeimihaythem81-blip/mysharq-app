@@ -297,7 +297,45 @@ def screen_categories(user, settings):
             store.remove_cat_image(path, "manager"); st.rerun()
     except ValueError as e:
         st.error(str(e))
+    tree_replace_ui(user)
     category_images_zip(settings)
+
+
+def tree_replace_ui(user):
+    st.markdown("---")
+    st.subheader("Replace the whole tree (from Excel)")
+    st.write("Upload an Excel file with a sheet named **Categories** (columns Section, Branch, Sub-Branch). "
+             "The new tree replaces the current one; your items must already fit it.")
+    f = st.file_uploader("Excel file with the Categories sheet", type=["xlsx"], key="tr_up")
+    if f is not None and st.button("Check tree", key="tr_check"):
+        paths = catalog.parse_categories_sheet(f.getvalue(), f.name)
+        if not paths:
+            st.error("No 'Categories' sheet with rows was found."); ss().pop("tr", None)
+        else:
+            ss().tr = paths
+    paths = ss().get("tr")
+    if not paths:
+        return
+    new = catalog.tree_from_paths(paths)
+    secs, brs, subs = catalog.tree_stats(new)
+    st.write("New tree: **%d sections, %d branches, %d sub-branches**." % (secs, brs, subs))
+    cur = {c["section"] for c in store.categories()}
+    gone = sorted(cur - {c["section"] for c in new})
+    if gone:
+        st.caption("Sections that will disappear: " + ", ".join(gone[:20]))
+    items = store.items()
+    bad = catalog.items_outside_tree(new, items)
+    if bad:
+        st.error("%d existing category path(s) used by items are not in the new tree, for example: %s. "
+                 "Add them to the file, or move those items first." % (len(bad), "; ".join(" > ".join(p) for p in bad[:3])))
+        return
+    st.warning("This replaces the current tree. A backup is saved first, and images of levels that no longer exist are removed.")
+    if reauth(user, "tr_ra") and st.button("Replace the tree", key="del_tree", use_container_width=True):
+        imgmap, removed = catalog.prune_image_keys(dict(store.catimages()), new)
+        store.save_catalog(catalog.canonicalize_items(items, new), new, "manager", "tree-replace", backup=True, imgmap=imgmap)
+        store.delete_cat_image_files(removed, "manager")
+        ss().pop("tr", None)
+        st.success("Done. The new tree is live."); st.rerun()
 
 
 def category_images_zip(settings):

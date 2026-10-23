@@ -86,6 +86,10 @@ Recovery if you forget the manager password: in `mysharq-data` delete `manager.j
 - **Backups:** Manager > Backup > Automatic backups (newest 10, restorable).
 - **Live item-number search** (customer page, Photos screen, Manager > Items > Edit/delete): type characters and a list of up to 6 matching items appears and updates with every key; arrows scroll the rest. Items whose number starts with the typed characters come first, then items that contain them.
 
+## 7c. The 20-section tree (v2.2)
+The classification tree of the owner (20 sections, 98 branches, 95 sub-branches) is the new default (`seed/categories.json`) and is also provided as an Excel file (`templates/MY_SHARQ_Tree_20_Sections.xlsx`, sheet **Categories**).
+To load it into a store that already runs: Manager > Categories > **Replace the whole tree (from Excel)** > upload that file > Check tree > confirm with your password. It is blocked if existing items would not fit the new tree, a backup is saved first, and images of levels that disappear are removed.
+
 ## 8. Smoke test (10 minutes)
 1. Customer: open the app, search `lc1 d09-m7`, add to basket, send with name + `0912345678`. See the confirmation and download the PDF and Excel.
 2. An alert arrives on your phone (name and number of lines only, never the phone number).

@@ -157,6 +157,13 @@ def set_cat_images(mapping, actor):
     CACHE.invalidate("i:"); CACHE.invalidate("d:catimages")
 
 
+def delete_cat_image_files(tokens, actor):
+    """Remove category image files that no longer belong to any level."""
+    if tokens:
+        ctx().images.commit_files({"images/cat/%s.jpg" % t: None for t in tokens}, "%s|catimages-prune|%d" % (actor, len(tokens)))
+        CACHE.invalidate("i:")
+
+
 def remove_cat_image(path, actor):
     imgmap, gone = catalog.drop_image_keys(dict(catimages()), path)
     if gone:
