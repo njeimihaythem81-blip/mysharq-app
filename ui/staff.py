@@ -222,7 +222,7 @@ def screen_photos(user, settings):
         st.rerun()
     q = st.text_input("Or search by words", placeholder="Search by description", key="photo_q")
     only = st.checkbox("Only items without a photo", value=True, key="photo_only")
-    pool = catalog.search(pub, q) if q.strip() else pub["items"]
+    pool = catalog.smart_search(pub, q)[0] if q.strip() else pub["items"]
     if only:
         pool = [i for i in pool if i["key"] not in have]
     page = ss().setdefault("photo_page", 0)

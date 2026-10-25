@@ -29,7 +29,7 @@ header[data-testid="stHeader"]{background:transparent}
 [data-testid="stAppViewContainer"]::before{content:"";position:fixed;inset:0;background:rgba(7,11,13,__OP__);pointer-events:none;z-index:0}
 .block-container,[data-testid="stMainBlockContainer"]{max-width:720px;position:relative;z-index:1;background:rgba(36,44,48,.62);
  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(200,210,215,.35);border-radius:14px;
- padding:1.2rem 1rem 6rem 1rem;margin-top:.8rem}
+ padding:1.2rem 1rem 2.5rem 1rem;margin-top:.8rem}
 h1,h2,h3,h4{color:#39ff14 !important}
 .stApp,.stMarkdown,label,p,span,li{color:#e8eef0}
 .sq-head{display:flex;align-items:center;margin-bottom:.6rem}
@@ -37,16 +37,18 @@ h1,h2,h3,h4{color:#39ff14 !important}
 .sq-foot{text-align:center;font-size:.82rem;color:#9fb0b5;margin-top:1.5rem}
 .sq-foot a{color:#39ff14}
 .stButton>button,.stDownloadButton>button,[data-testid="stFormSubmitButton"]>button,[data-testid^="stBaseLinkButton"],.stLinkButton a{
- background:linear-gradient(180deg,#2b3236,#11161a) !important;border:1px solid #8a979c !important;border-radius:10px !important;
- min-height:44px;font-weight:600;color:#39ff14 !important;transition:box-shadow .15s}
-.stButton>button p,.stDownloadButton>button p,[data-testid="stFormSubmitButton"]>button p,.stLinkButton a p{color:#39ff14 !important}
-.stButton>button:hover,.stDownloadButton>button:hover,[data-testid="stFormSubmitButton"]>button:hover,.stLinkButton a:hover{box-shadow:0 0 12px rgba(57,255,20,.6)}
-.stButton>button:disabled,.stDownloadButton>button:disabled{background:#2a2f31 !important;border-color:#4a5356 !important;box-shadow:none !important}
-.stButton>button:disabled p{color:#7b8487 !important}
+ background:linear-gradient(180deg,#b4bcc0 0%,#7b858a 46%,#566066 54%,#8a949a 100%) !important;border:1px solid #d3dade !important;border-radius:10px !important;
+ min-height:44px;font-weight:700;color:#39ff14 !important;transition:box-shadow .15s;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 1px 3px rgba(0,0,0,.45)}
+.stButton>button p,.stButton>button span,.stDownloadButton>button p,.stDownloadButton>button span,[data-testid="stFormSubmitButton"]>button p,.stLinkButton a p,.stLinkButton a span{
+ color:#39ff14 !important;text-shadow:0 0 1px #000,0 0 2px #000,0 1px 2px rgba(0,0,0,.85)}
+.stButton>button:hover,.stDownloadButton>button:hover,[data-testid="stFormSubmitButton"]>button:hover,.stLinkButton a:hover{box-shadow:0 0 12px rgba(57,255,20,.75),inset 0 1px 0 rgba(255,255,255,.55) !important}
+.stButton>button:disabled,.stDownloadButton>button:disabled{background:linear-gradient(180deg,#6f777b,#4a5155) !important;border-color:#8a949a !important;box-shadow:none !important}
+.stButton>button:disabled p,.stButton>button:disabled span{color:#9aa5a0 !important;text-shadow:none}
 [class*="st-key-del_"] button{border-color:#ff3b3b !important}
 [class*="st-key-del_"] button p{color:#ff3b3b !important}
 [class*="st-key-del_"] button:hover{box-shadow:0 0 12px rgba(255,59,59,.6) !important}
-.st-key-basketbar{position:fixed;left:0;right:0;bottom:0;z-index:60;padding:8px 14px;background:rgba(10,14,16,.94);border-top:1px solid #39ff14}
+.st-key-basketbar{position:sticky;top:.5rem;z-index:100;display:flex !important;flex-direction:column;align-items:flex-end;background:none;border:none;padding:0 0 .3rem 0;margin:0}
+.st-key-basketbar button{min-height:42px;padding:.2rem .9rem}
 .st-key-hp_wrap{position:absolute !important;left:-9999px;height:0;overflow:hidden}
 .it{display:flex;gap:10px;align-items:center;margin:.4rem 0 .2rem 0}
 .it img,.it .ph{width:72px;height:72px;min-width:72px;object-fit:contain;background:#fff;border-radius:8px}

@@ -167,7 +167,7 @@ def items_edit(user, items):
     q = st.text_input("Or find an item by words", key="ei_q")
     if not q.strip():
         st.caption("Type part of the Item No or description."); return
-    hits = catalog.search(store.public(), q)[:30]
+    hits = catalog.smart_search(store.public(), q)[0][:30]
     if not hits:
         st.info("No match."); return
     desc_of = {h["item_no"]: h["description"] for h in hits}

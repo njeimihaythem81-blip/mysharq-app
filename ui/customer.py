@@ -109,12 +109,12 @@ def browse(cat):
     picked = cat["by_no"].get(sel["item_no"]) if sel and sel.get("item_no") else None
     if picked:
         card(picked, "sel_")           # own widget keys: the same item may also appear in the list below
-    q = st.text_input("Search", key="q", placeholder="Search by item number or description", label_visibility="collapsed")
+    q = st.text_input("Search", key="q", placeholder="Intelligent search", label_visibility="collapsed")
     if ss.lastq != q:
         ss.lastq = q; ss.page = 0
     if q.strip():
-        res = catalog.search(cat, q)
-        st.caption("%d result(s)" % len(res))
+        res, mode = catalog.smart_search(cat, q)
+        st.caption("%d result(s)" % len(res) + (" - no exact match, showing the closest" if mode == "closest" else ""))
         if not res:
             st.info("No items found. Try a shorter part of the item number.")
         item_list(res)
@@ -230,16 +230,16 @@ def render(settings):
         cat = store.public()
     except Exception:
         common.header(settings); common.friendly_error(); return
-    common.header(settings)
     ss = _ss()
+    if ss.view == "browse":
+        n = len(ss.basket)
+        with st.container(key="basketbar"):                       # top right, stays visible while scrolling
+            st.button("View basket (%d)" % n, key="open_basket", icon=":material/shopping_cart:", on_click=open_basket, disabled=n == 0)
+    common.header(settings)
     if ss.view == "basket":
         basket_view(cat, settings)
     elif ss.view == "done":
         done_view(settings)
     else:
         browse(cat)
-    n = len(ss.basket)
-    if ss.view == "browse" and n:
-        with st.container(key="basketbar"):
-            st.button("View basket (%d items)" % n, key="open_basket", on_click=open_basket, use_container_width=True)
     restore_basket(cat)

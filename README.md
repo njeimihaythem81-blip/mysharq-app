@@ -90,6 +90,10 @@ Recovery if you forget the manager password: in `mysharq-data` delete `manager.j
 The classification tree of the owner (20 sections, 98 branches, 95 sub-branches) is the new default (`seed/categories.json`) and is also provided as an Excel file (`templates/MY_SHARQ_Tree_20_Sections.xlsx`, sheet **Categories**).
 To load it into a store that already runs: Manager > Categories > **Replace the whole tree (from Excel)** > upload that file > Check tree > confirm with your password. It is blocked if existing items would not fit the new tree, a backup is saved first, and images of levels that disappear are removed.
 
+## 7d. Intelligent search (v2.3)
+The search box ("Intelligent search") ranks by relevance: item number first (exact, then starting with, then containing), then description and category words (rarer words weigh more). It accepts plurals, small spelling mistakes, spaces inside units (`25 a`), and Arabic or English synonyms (`كونتاكتور` finds contactors). If not every word is found it shows the closest matches. The synonym list is in `core/synonyms.py` and can be extended.
+Buttons: chrome gray with neon-green text everywhere (delete buttons keep a red outline and red text on purpose). The basket button sits at the top right with a basket icon.
+
 ## 8. Smoke test (10 minutes)
 1. Customer: open the app, search `lc1 d09-m7`, add to basket, send with name + `0912345678`. See the confirmation and download the PDF and Excel.
 2. An alert arrives on your phone (name and number of lines only, never the phone number).

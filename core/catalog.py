@@ -45,7 +45,8 @@ def build_public(items, categories):
         tree.append({"name": c["section"], "branches": brs})
     payload = sorted(([d["item_no"], d["description"][:70], 1 if d["status"] == "Available" else 0] for d in pub),
                      key=lambda r: (search_norm(r[0]), r[0]))
-    return {"items": pub, "level": level, "counts": counts, "by_no": by_no, "index": index, "tree": tree, "payload": payload}
+    return {"items": pub, "level": level, "counts": counts, "by_no": by_no, "index": index, "tree": tree, "payload": payload,
+            "smart": build_smart_index(pub)}
 
 
 def children(cat, path):
@@ -601,3 +602,129 @@ def prune_image_keys(imgmap, categories):
     ids = {path_id(p) for p in all_paths(categories)}
     keep = {k: v for k, v in imgmap.items() if k in ids}
     return keep, [v for k, v in imgmap.items() if k not in ids and v]
+
+
+# ======================================================================= v2.3: intelligent search (relevance ranking)
+import bisect as _bisect
+import difflib as _difflib
+import math as _math
+
+from .synonyms import SYN as _SYN
+
+_TOKEN_RE = _re.compile(r"[a-z0-9\u0600-\u06FF]+")
+_AR_DIAC = _re.compile(r"[\u064B-\u0652\u0640]")
+_AR_START = _re.compile(r"^[\u0600-\u06FF]")
+
+
+def _ar_norm(t):
+    t = _AR_DIAC.sub("", t)
+    t = _re.sub("[\u0625\u0623\u0622]", "\u0627", t).replace("\u0649", "\u064a").replace("\u0629", "\u0647")
+    return t[2:] if t.startswith("\u0627\u0644") and len(t) > 4 else t
+
+
+def _stem(w):
+    if len(w) > 4 and w.endswith("ies"):
+        return w[:-3] + "y"
+    if len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
+        return w[:-1]
+    return w
+
+
+def _tokens(text):
+    return [_ar_norm(t) if _AR_START.match(t) else _stem(t) for t in _TOKEN_RE.findall(str(text).lower())]
+
+
+def build_smart_index(pub_items):
+    """Inverted indexes over description words and category names, built once per catalogue load."""
+    docs, inv_d, inv_c = [], {}, {}
+    for i, d in enumerate(pub_items):
+        dw = _tokens(d["description"])
+        cw = _tokens(" ".join(x for x in (d["section"], d["branch"], d["sub_branch"]) if x))
+        docs.append({"no": search_norm(d["item_no"]), "text": search_norm(d["item_no"] + d["description"]),
+                     "avail": d["status"] == "Available", "dlen": len(dw)})
+        for w in set(dw):
+            inv_d.setdefault(w, []).append(i)
+        for w in set(cw):
+            inv_c.setdefault(w, []).append(i)
+    vocab = sorted(set(inv_d) | set(inv_c))
+    n = max(1, len(docs))
+    idf = {w: _math.log(1.0 + n / (len(inv_d.get(w, ())) + len(inv_c.get(w, ())) or 1)) for w in vocab}
+    return {"docs": docs, "inv_d": inv_d, "inv_c": inv_c, "vocab": vocab, "vset": set(vocab), "idf": idf}
+
+
+def _vocab_matches(ix, v):
+    """{word: quality} for a query word: exact 1.0, prefix about 0.8, contained 0.45, close spelling about 0.5."""
+    vocab, out = ix["vocab"], {}
+    if v in ix["vset"]:
+        out[v] = 1.0
+    if len(v) >= 2 or v.isdigit():
+        k, c = _bisect.bisect_left(vocab, v), 0
+        while k < len(vocab) and vocab[k].startswith(v) and c < 200:
+            out.setdefault(vocab[k], 0.8 - min(0.3, (len(vocab[k]) - len(v)) * 0.02)); k += 1; c += 1
+    if len(v) >= 3 and len(out) < 20:
+        c = 0
+        for w in vocab:
+            if v in w and w not in out:
+                out[w] = 0.45; c += 1
+                if c >= 100:
+                    break
+    if not out and len(v) >= 4:
+        for w in _difflib.get_close_matches(v, vocab, n=3, cutoff=0.78):
+            out[w] = 0.5
+    return out
+
+
+def smart_search(cat, query, limit=300):
+    """Relevance search over item number, description and category names. -> (items, mode)
+    mode: 'exact' (every word found), 'closest' (only some words found), 'none'.
+    Item numbers rank first (exact, then prefix, then contained); rarer words weigh more; tolerates plurals,
+    small spelling mistakes, spaces inside units ('25 a'), and Arabic/English synonyms."""
+    ix, items = cat["smart"], cat["items"]
+    q = clean_text(query, 120)
+    if not q:
+        return [], "none"
+    qn = search_norm(q)
+    toks = [t for t in _tokens(q) if len(t) > 1 or t.isdigit()]
+    scores, covered, by_no = {}, {}, set()
+    if len(qn) >= 2 and all(ord(ch) < 128 for ch in q):      # item numbers are ASCII: an Arabic query must not match them by its digits alone
+        for i, doc in enumerate(ix["docs"]):
+            p = doc["no"].find(qn)
+            if p < 0:
+                continue
+            s = 1000.0 if doc["no"] == qn else (800.0 - min(len(doc["no"]) - len(qn), 100)) if p == 0 else 500.0 - min(p, 100)
+            scores[i] = scores.get(i, 0.0) + s; by_no.add(i)
+    for t in toks:
+        best = {}
+        for rank, v in enumerate([t] + _SYN.get(t, [])):
+            f = 1.0 if rank == 0 else 0.7                      # a synonym counts less than the word itself
+            for w, qual in _vocab_matches(ix, v).items():
+                wt = ix["idf"][w] * qual * f
+                for i in ix["inv_d"].get(w, ()):
+                    if wt * 3 > best.get(i, 0.0):
+                        best[i] = wt * 3
+                for i in ix["inv_c"].get(w, ()):
+                    if wt * 1.5 > best.get(i, 0.0):
+                        best[i] = wt * 1.5
+        for i, c in best.items():
+            scores[i] = scores.get(i, 0.0) + c
+            covered[i] = covered.get(i, 0) + 1
+    if len(toks) > 1:                                          # '25 a' / 'contactor 25a': compact text match
+        for i in list(scores):
+            if qn and qn in ix["docs"][i]["text"]:
+                scores[i] += 40.0
+    need = len(toks)
+    full = [i for i in scores if i in by_no or (need and covered.get(i, 0) >= need)]
+    if full:
+        ids, mode = full, "exact"
+    elif scores:
+        ids, mode = [i for i in scores if covered.get(i, 0) >= 1], "closest"
+        ids.sort(key=lambda i: -covered.get(i, 0))
+        if not ids:
+            return [], "none"
+    else:
+        return [], "none"
+    docs = ix["docs"]
+    key = (lambda i: (-covered.get(i, 0), -(scores[i] + (1.0 if docs[i]["avail"] else 0.0)), items[i]["item_no"])) if mode == "closest" else \
+          (lambda i: (-(scores[i] + (1.0 if docs[i]["avail"] else 0.0) - 0.01 * docs[i]["dlen"]), items[i]["item_no"]))
+    ids.sort(key=key)
+    return [items[i] for i in ids[:limit]], mode
