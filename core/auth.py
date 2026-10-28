@@ -59,6 +59,8 @@ def session_user(token):
         if m and d["u"] == "manager" and m["token_version"] == d["v"]:
             return {"id": "manager", "role": "manager", "display": "Store Manager"}
         return None
+    if d["r"] != "operator":                                   # a customer token must never act as a staff session
+        return None
     usr = store.find_user(d["u"])
     if usr and usr.get("active", True) and usr["token_version"] == d["v"]:
         return {"id": usr["username"], "role": "operator", "display": usr["display"], "must_change": usr.get("must_change", False)}
@@ -167,3 +169,86 @@ def set_operator_active(username, active):
 def delete_operator(username):
     store.mutate_users(lambda us: us.__setitem__(slice(None), [x for x in us if x["username"] != username]),
                        "manager", "operator-delete:" + username)
+
+
+# ------------- customers (v2.5): name + code given by the manager -------------
+CUST_TTL = 30 * 86400
+CUST_GENERIC = "Invalid name or code."
+CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"          # no 0/O/1/I/L
+
+
+def customer_id(name):
+    return clean_text(name, 40).lower()
+
+
+def norm_code(code):
+    import re
+    return re.sub(r"[^A-Z0-9]", "", str(code or "").upper())
+
+
+def new_code():
+    import secrets
+    c = "".join(secrets.choice(CODE_ALPHABET) for _ in range(8))
+    return c[:4] + "-" + c[4:]
+
+
+def customer_login(name, code, ip):
+    """-> (ok, message, token, customer). Throttled, generic errors, dummy hash for unknown names."""
+    cid = customer_id(name)
+    key = "c|%s|%s" % (cid, ip)
+    if not LIMITER.allow("clogin:" + ip, 30, 60):
+        return False, "Too many attempts. Please wait a minute.", None, None
+    w = THROTTLE.wait_seconds(key)
+    if w > 0:
+        return False, "Too many attempts. Try again in %d seconds." % w, None, None
+    c = store.find_customer(cid) if cid else None
+    ok = verify_password(norm_code(code), c["hash"]) if c else dummy_verify(code)
+    if ok and c and c.get("active", True):
+        THROTTLE.reset(key)
+        return True, "ok", make_token(_secret(), c["id"], "customer", c["token_version"], CUST_TTL), {"id": c["id"], "display": c["display"]}
+    THROTTLE.fail(key)
+    return False, CUST_GENERIC, None, None
+
+
+def customer_session(token):
+    d = verify_token(_secret(), token or "")
+    if not d or d.get("r") != "customer":
+        return None
+    c = store.find_customer(d["u"])
+    if c and c.get("active", True) and c["token_version"] == d["v"]:
+        return {"id": c["id"], "display": c["display"]}
+    return None
+
+
+def customer_logout(cid):
+    store.mutate_customers(lambda cs: [x.update(token_version=x["token_version"] + 1) for x in cs if x["id"] == cid], "customer:" + cid, "logout")
+
+
+def add_customer(display):
+    """-> (ok, message_or_code). The code is shown to the manager ONCE; only its hash is stored."""
+    d = clean_text(display, 40)
+    cid = customer_id(d)
+    if len(cid) < 2:
+        return False, "Customer name: at least 2 characters."
+    if store.find_customer(cid):
+        return False, "A customer with this name already exists."
+    code = new_code()
+    rec = {"id": cid, "display": d, "hash": hash_password(norm_code(code)), "active": True, "token_version": 1,
+           "created": time.strftime("%Y-%m-%d", time.gmtime())}
+    store.mutate_customers(lambda cs: cs.append(rec), "manager", "customer-add:" + cid)
+    return True, code
+
+
+def reset_customer_code(cid):
+    code = new_code(); h = hash_password(norm_code(code))
+    store.mutate_customers(lambda cs: [x.update(hash=h, token_version=x["token_version"] + 1) for x in cs if x["id"] == cid], "manager", "customer-reset:" + cid)
+    return code
+
+
+def set_customer_active(cid, active):
+    store.mutate_customers(lambda cs: [x.update(active=active, token_version=x["token_version"] + 1) for x in cs if x["id"] == cid],
+                           "manager", "customer-%s:%s" % ("on" if active else "off", cid))
+
+
+def delete_customer(cid):
+    store.mutate_customers(lambda cs: cs.__setitem__(slice(None), [x for x in cs if x["id"] != cid]), "manager", "customer-delete:" + cid)

@@ -50,7 +50,7 @@ def _fit(im, box):
 
 
 def process_photo(data):
-    """-> (thumb_jpeg, full_jpeg)"""
+    """-> (thumb_jpeg 300 px, full_jpeg 900 px). Both metadata-free. The large copy is kept for a future click-to-enlarge."""
     im = _open(data)
     return _jpeg(_fit(im, (300, 300)), 78), _jpeg(_fit(im, (900, 900)), 82)
 

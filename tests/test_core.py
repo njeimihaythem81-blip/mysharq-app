@@ -15,7 +15,9 @@ from core.security import LIMITER, THROTTLE
 from core.validators import (decode_key, item_key, neutralize_formula, normalize_phone, normalize_support, safe_html, search_norm)
 from tests.fakegh import FakeRepo
 
-SEED = json.load(open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "seed", "categories.json")))["categories"]
+HERE = os.path.dirname(os.path.abspath(__file__))
+SEED = json.load(open(os.path.join(HERE, "fixture_categories.json")))["categories"]            # frozen test tree
+REAL_TREE = json.load(open(os.path.join(os.path.dirname(HERE), "seed", "categories.json")))["categories"]   # the production tree
 SECRETS = {"GITHUB_TOKEN_DATA": "t1", "GITHUB_TOKEN_IMAGES": "t2", "GITHUB_OWNER": "o", "IMAGES_REPO": "i", "DATA_REPO": "d",
            "SESSION_SECRET": "s" * 40, "SETUP_CODE": "setup-code-123", "STAFF_KEY": "k" * 24, "BRANCH": "main"}
 ITEMS = [{"item_no": "LC1D09M7", "description": "Contactor 9A", "section": "TESYS", "branch": "CONTACTORS TO 60A 30KW", "sub_branch": "", "qty": 120},
@@ -234,6 +236,7 @@ class AuthAndPhotos(unittest.TestCase):
         self.assertTrue(store.save_photo("LC1D09M7", t, f, "ali"))
         self.assertFalse(store.save_photo("LC1D09M7", t, f, "sara"))                       # replacement: no point
         self.assertEqual(store.points(), {"ali": 1})
+        self.assertEqual(sorted(p for p in self.imgs.files if p.startswith("images/")), ["images/full/LC1D09M7.jpg", "images/thumb/LC1D09M7.jpg"])   # both sizes kept
         for i in range(1, 100): self.data.put_file("photolog/K%d@@ali@@%d.json" % (i, 1000 + i), b"{}", "t")
         store.CACHE.invalidate("d:photolog"); self.assertEqual(store.points()["ali"] // 100, 1)  # 100 points = 1 star
         self.assertEqual(store.points(reset_at=1050)["ali"], 51)   # K50..K99 plus the real upload
@@ -285,7 +288,6 @@ class V2(unittest.TestCase):
         m3, gone = catalog.drop_image_keys(m2, ("TESYS NEW",)); self.assertEqual(sorted(gone), ["t1", "t2"]); self.assertEqual(list(m3.values()), ["t3"])
 
     def test_category_images_end_to_end(self):
-        t, f = imaging.process_photo(self._jpg())
         store.set_cat_images({("TESYS",): imaging.process_cat_image(self._jpg())}, "manager")
         url = store.cat_image_url(("TESYS",)); self.assertIsNotNone(url); self.assertIn("/images/cat/", url)
         self.assertIsNone(store.cat_image_url(("ACTI 9",)))
@@ -348,6 +350,120 @@ class Theme(unittest.TestCase):
         self.assertIn("width:100%;height:100%", css); self.assertIn("a%20b.jpg", css); self.assertIn("rgba(7,11,13,0.76)", css)
         self.assertNotIn("__BGM__", css); self.assertNotIn("__BGD__", css); self.assertNotIn("__OP__", css)
         self.assertTrue(css.startswith("<style>") and css.rstrip().endswith("</style>"))
+        self.assertIn("st-key-basketbar{position:sticky", css); self.assertIn("align-items:flex-end", css)           # basket button: top right
+        self.assertNotIn("position:fixed;left:0;right:0;bottom:0", css)
+        self.assertIn("color:#39ff14 !important", css); self.assertIn("#b4bcc0", css)                              # chrome gray button, neon text
+
+
+class LiveSearch(unittest.TestCase):
+    def test_payload_has_no_quantity_and_is_sorted(self):
+        pub = catalog.build_public(ITEMS, SEED)
+        self.assertEqual([r[0] for r in pub["payload"]], sorted([i["item_no"] for i in ITEMS], key=lambda n: (catalog.search_norm(n), n)))
+        row = next(r for r in pub["payload"] if r[0] == "LC1D09M7")
+        self.assertEqual(row, ["LC1D09M7", "Contactor 9A", 1]); self.assertEqual(next(r for r in pub["payload"] if r[0] == "LC1D80M7")[2], 0)
+        self.assertNotIn("120", json.dumps(pub["payload"]))                                    # the stock number never leaves the server
+        big = catalog.build_public([dict(ITEMS[0], item_no="X%d" % i, description="d" * 200) for i in range(5000)], SEED)["payload"]
+        self.assertLessEqual(len(json.dumps(big)), 500_000)                                    # 5000 items stay under about 0.5 MB
+
+    def test_browser_matching_logic(self):
+        import shutil, subprocess
+        if not shutil.which("node"):
+            self.skipTest("node is not installed")
+        here = os.path.dirname(os.path.abspath(__file__))
+        for script, ok in (("matcher_test.js", "matcher OK"), ("component_harness.js", "component behaviour OK")):
+            r = subprocess.run(["node", os.path.join(here, script)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr); self.assertIn(ok, r.stdout)
+
+
+class NewTree(unittest.TestCase):
+    def setUp(self): self.data, self.imgs, self.sent = fresh()
+
+    def test_production_tree_shape(self):
+        self.assertEqual(catalog.tree_stats(REAL_TREE), (20, 98, 95))
+        self.assertEqual([c["section"] for c in REAL_TREE][:3], ["IDE BOXES", "TESYS", "MISC AND ACCESSORIES"])
+        self.assertEqual(len(catalog.all_paths(REAL_TREE)), 20 + 98 + 95)
+        ids = [catalog.path_id(p) for p in catalog.all_paths(REAL_TREE)]; self.assertEqual(len(ids), len(set(ids)))      # no duplicates
+
+    def test_excel_round_trip_and_replace(self):
+        # tree -> Excel Categories sheet -> paths -> tree: identical and in the same order
+        data = open(os.path.join(os.path.dirname(HERE), "templates", "MY_SHARQ_Tree_20_Sections.xlsx"), "rb").read()
+        paths = catalog.parse_categories_sheet(data, "t.xlsx")
+        self.assertEqual(paths, catalog.all_paths(REAL_TREE)); self.assertEqual(catalog.tree_from_paths(paths), catalog.norm_categories(REAL_TREE))
+        # the item template imports cleanly against the new tree (3 sample rows)
+        tpl = open(os.path.join(os.path.dirname(HERE), "templates", "MY_SHARQ_Items_Template.xlsx"), "rb").read()
+        rows, err = catalog.parse_items_file(tpl, "t.xlsx"); self.assertIsNone(err)
+        rep = catalog.validate_import(rows, REAL_TREE); self.assertEqual((len(rep["ok"]), rep["unknown"]), (len(rows), {}))
+        # replacing the old tree: blocked while items would be orphaned, allowed once they fit
+        orphan = {"item_no": "Z", "description": "d", "section": "OLD SECTION", "branch": "", "sub_branch": "", "qty": 0}
+        bad = catalog.items_outside_tree(REAL_TREE, ITEMS + [orphan]); self.assertEqual(bad, [("OLD SECTION",)])
+        sec, br, sb = next((c["section"], b["name"], s) for c in REAL_TREE for b in c["branches"] for s in b["sub_branches"])
+        fit = [{"item_no": "N1", "description": "d", "section": sec.lower(), "branch": br, "sub_branch": sb, "qty": 1}]
+        self.assertEqual(catalog.items_outside_tree(REAL_TREE, fit), [])
+        self.assertEqual(catalog.canonicalize_items(fit, REAL_TREE)[0]["section"], sec)                               # spelling fixed
+        old_map = {catalog.path_id(("IDE BOXES",)): "keep", catalog.path_id(("OLD SECTION",)): "gone"}
+        m, removed = catalog.prune_image_keys(old_map, REAL_TREE); self.assertEqual((m, removed), ({catalog.path_id(("IDE BOXES",)): "keep"}, ["gone"]))
+
+    def test_replace_tree_end_to_end(self):
+        store.set_ctx(store.Ctx(self.data, self.imgs)); self.data.put_file("categories.json", json.dumps({"categories": SEED}).encode(), "t")
+        self.data.files["items.json"] = json.dumps({"items": []}).encode()
+        new = catalog.tree_from_paths(catalog.all_paths(REAL_TREE))
+        store.save_catalog([], new, "manager", "tree-replace", backup=True, imgmap={})
+        store.CACHE.invalidate("d:"); self.assertEqual(catalog.tree_stats(store.categories()), (20, 98, 95)); self.assertEqual(len(store.list_backups()), 1)
+
+
+class SmartSearch(unittest.TestCase):
+    def setUp(self):
+        mk = lambda no, d, q, b="CONTACTORS TO 60A 30KW": {"item_no": no, "description": d, "section": "TESYS", "branch": b, "sub_branch": "", "qty": q}
+        self.items = [mk("LC1D25M7", "TeSys D contactor 3P 25A 220V AC coil", 5), mk("LC1D09M7", "TeSys D contactor 3P 9A 220V AC coil", 0),
+                      mk("LRD12", "Thermal overload relay 5.5-8 A", 3, "OVERLOADS"), mk("LRD32", "Thermal overload relay 23-32 A", 3, "OVERLOADS"),
+                      mk("A9F74110", "iC60N circuit breaker 1P 10A C curve", 9, "1 POLE"), mk("XB5AA31", "Green flush push button 22 mm", 4, "PUSH BUTTONS"),
+                      mk("A9F74310", "iC60N circuit breaker 3P 10A C curve", 9, "3 POLES"), mk("ATV12H018M2", "Variable speed drive 0.18 kW 1-phase", 2, "ALTIVAR 12"), mk("RXM4AB2P7", "Plug-in relay 4 CO 6 A 230 V AC", 7, "ZELIO PLUG IN RELAYS")]
+        self.cat = catalog.build_public(self.items, SEED)
+
+    def top(self, q, n=1):
+        res, mode = catalog.smart_search(self.cat, q); return [r["item_no"] for r in res[:n]], mode
+
+    def test_item_number_first(self):
+        self.assertEqual(self.top("lc1d25"), (["LC1D25M7"], "exact")); self.assertEqual(self.top("LC1 D-09")[0], ["LC1D09M7"])
+        self.assertEqual(set(self.top("lc1d", 2)[0]), {"LC1D25M7", "LC1D09M7"}); self.assertEqual(self.top("xb5aa31")[0], ["XB5AA31"])
+
+    def test_relevance_by_words(self):
+        self.assertEqual(self.top("contactor 25a")[0], ["LC1D25M7"]); self.assertEqual(self.top("overload relay 32")[0], ["LRD32"])
+        self.assertEqual(self.top("push button")[0], ["XB5AA31"]); self.assertEqual(self.top("variable speed drive")[0], ["ATV12H018M2"])
+        self.assertEqual(self.top("relay 230v")[0], ["RXM4AB2P7"])
+        r = [i["item_no"] for i in catalog.smart_search(self.cat, "relay")[0]]; self.assertEqual(set(r[:3]), {"LRD12", "LRD32", "RXM4AB2P7"})
+
+    def test_plural_typo_units(self):
+        self.assertEqual(set(self.top("contactors", 2)[0]), {"LC1D25M7", "LC1D09M7"})
+        self.assertEqual(self.top("contactr 25a")[0], ["LC1D25M7"]); self.assertEqual(self.top("breakr 10a")[0], ["A9F74110"])
+        self.assertEqual(self.top("25 a")[0], ["LC1D25M7"]); self.assertEqual(self.top("tesys 25a")[0], ["LC1D25M7"])        # category names count too
+
+    def test_arabic_and_synonyms(self):
+        self.assertEqual(set(self.top("كونتاكتور", 2)[0]), {"LC1D25M7", "LC1D09M7"}); self.assertEqual(self.top("قاطع 10")[0], ["A9F74110"])
+        self.assertEqual(set(self.top("الريليه", 3)[0]), {"LRD12", "LRD32", "RXM4AB2P7"}); self.assertEqual(self.top("انفرتر")[0], ["ATV12H018M2"])
+        self.assertEqual(self.top("vfd")[0], ["ATV12H018M2"]); self.assertEqual(self.top("rcd"), ([], "none"))              # nothing in this tiny catalogue
+        self.assertEqual(self.top("قاطع 3")[0], ["A9F74310"])                                                               # a single digit matches 3P, 30A...
+        self.assertEqual(self.top("كونتاكتور 32")[1], "closest")                                                           # digits alone must not hit item number LRD32 as "exact"
+
+    def test_closest_and_none(self):
+        res, mode = catalog.smart_search(self.cat, "contactor 999z"); self.assertEqual(mode, "closest"); self.assertTrue(res[0]["item_no"].startswith("LC1D"))
+        self.assertEqual(catalog.smart_search(self.cat, "zzzzqq"), ([], "none")); self.assertEqual(catalog.smart_search(self.cat, "  "), ([], "none"))
+
+    def test_available_first_on_ties(self):
+        items = [dict(self.items[0], item_no="T1", description="same words here", qty=0), dict(self.items[0], item_no="T2", description="same words here", qty=4)]
+        res = catalog.smart_search(catalog.build_public(items, SEED), "same words")[0]; self.assertEqual([r["item_no"] for r in res], ["T2", "T1"])
+
+    def test_no_stock_numbers_and_speed(self):
+        self.assertNotIn('"qty"', json.dumps(self.cat["smart"]["docs"]))
+        import random, time as _t
+        random.seed(1); words = ["contactor", "relay", "breaker", "drive", "button", "lamp", "timer", "motor", "switch", "cable", "box", "panel", "fuse", "meter"]
+        big = [{"item_no": "P%05d" % i, "description": " ".join(random.choice(words) + str(random.choice([6, 9, 12, 25, 40, 63])) + "A" for _ in range(4)),
+                "section": "S", "branch": "B", "sub_branch": "", "qty": i % 3} for i in range(5000)]
+        t0 = _t.time(); cat = catalog.build_public(big, SEED); built = _t.time() - t0
+        t0 = _t.time()
+        for q in ("contactor 25a", "relay 40", "brekr 63a", "p0042", "motor drive", "25 a", "cntactor"): catalog.smart_search(cat, q)
+        per = (_t.time() - t0) / 7
+        self.assertLess(built, 8.0); self.assertLess(per, 1.0, "search took %.2fs" % per)
 
 
 class Cfg(unittest.TestCase):

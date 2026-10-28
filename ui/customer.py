@@ -3,9 +3,9 @@ import time
 
 import streamlit as st
 
-from core import catalog, docs, orders, store
+from core import bundles, catalog, docs, orders, store
 from core.validators import item_key, parse_int, safe_html
-from . import common, livesearch
+from . import bundleview, common, listview, livesearch
 
 PAGE = 24
 
@@ -42,6 +42,10 @@ def add(item_no, qkey):
 
 def open_basket():
     ss = _ss(); ss.view = "basket"; ss.form_started = ss.get("form_started") or time.time()
+
+
+def open_import():
+    ss = _ss(); ss.view = "import"; ss.q = ""
 
 
 def set_qty(item_no, k):
@@ -110,11 +114,16 @@ def browse(cat):
     if picked:
         card(picked, "sel_")           # own widget keys: the same item may also appear in the list below
     q = st.text_input("Search", key="q", placeholder="Intelligent search", label_visibility="collapsed")
+    st.button("Upload a list (Excel, PDF, text)", key="open_import", icon=":material/upload_file:", on_click=open_import, use_container_width=True)
     if ss.lastq != q:
         ss.lastq = q; ss.page = 0
     if q.strip():
-        res, mode = catalog.smart_search(cat, q)
+        for i, b in bundles.find(cat, q):                      # named bundles first (e.g. a panel with its door)
+            bundleview.render(cat, b, "sb%d" % i)
+        res, mode, info = catalog.smart_search_ex(cat, q)
         st.caption("%d result(s)" % len(res) + (" - no exact match, showing the closest" if mode == "closest" else ""))
+        if info["default"]:
+            st.caption("Items with %s are hidden. Add %s to your search to see them." % (", ".join(w.upper() for w in info["default"]), info["default"][0].upper()))
         if not res:
             st.info("No items found. Try a shorter part of the item number.")
         item_list(res)
@@ -165,14 +174,15 @@ def basket_view(cat, settings):
     st.subheader("Send your request")
     with st.form("send_rfq"):
         project = st.text_input("Project name (optional)", max_chars=80)
-        name = st.text_input("Your name", max_chars=60)
+        name = st.text_input("Your name", value=(ss.get("cust") or {}).get("display", ""), max_chars=60)
         phone = st.text_input("Mobile number", max_chars=24, placeholder="0912345678")
         with st.container(key="hp_wrap"):
             hp = st.text_input("Website", key="hp_field")
         st.caption("Your name and phone number are used only to reply to your request. We never publish them.")
         sent = st.form_submit_button("Send RFQ", use_container_width=True)
     if sent:
-        ok, msg, order = orders.submit(ss.basket, name, phone, project, ss.sid, common.client_ip(), hp, ss.get("form_started"))
+        ok, msg, order = orders.submit(ss.basket, name, phone, project, ss.sid, common.client_ip(), hp, ss.get("form_started"),
+                                       account=(ss.get("cust") or {}).get("id"))
         if not ok:
             st.error(msg); return
         with st.spinner("Preparing your documents..."):
@@ -236,7 +246,11 @@ def render(settings):
         with st.container(key="basketbar"):                       # top right, stays visible while scrolling
             st.button("View basket (%d)" % n, key="open_basket", icon=":material/shopping_cart:", on_click=open_basket, disabled=n == 0)
     common.header(settings)
-    if ss.view == "basket":
+    if ss.get("flash"):
+        st.success(ss.pop("flash"))
+    if ss.view == "import":
+        listview.render(cat)
+    elif ss.view == "basket":
         basket_view(cat, settings)
     elif ss.view == "done":
         done_view(settings)

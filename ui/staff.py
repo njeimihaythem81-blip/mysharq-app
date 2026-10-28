@@ -10,7 +10,7 @@ from core.validators import display_phone, item_key, safe_html, search_norm
 from . import common, livesearch
 
 OP_MENU = ["Orders", "My Orders", "Photos", "Leaderboard", "Account"]
-MGR_MENU = ["All Orders", "Operators", "Items", "Categories", "Settings", "Export", "Backup", "Photos", "Leaderboard", "Activity", "Account"]
+MGR_MENU = ["All Orders", "Operators", "Items", "Categories", "Training", "Customers", "Settings", "Export", "Backup", "Photos", "Leaderboard", "Activity", "Account"]
 
 
 def ss():
@@ -141,7 +141,8 @@ def order_detail(user, settings):
     st.button("Back to list", key="close_order", on_click=close_order)
     st.subheader(o["order_id"])
     st.markdown("**Customer:** %s<br>**Phone:** %s<br>%s" % (safe_html(o["customer"]["name"]), display_phone(o["customer"]["phone"]),
-                ("**Project:** " + safe_html(o["project_name"])) if o.get("project_name") else ""), unsafe_allow_html=True)
+                ("**Project:** " + safe_html(o["project_name"])) if o.get("project_name") else "") +
+                ("<br>**Account:** " + safe_html(o["account"]) if o.get("account") else ""), unsafe_allow_html=True)
     op_name = o.get("opened_by_display") or user["display"]
     st.link_button("Reply on WhatsApp", orders.whatsapp_link(o, op_name, settings), use_container_width=True)
     for l in o["lines"]:

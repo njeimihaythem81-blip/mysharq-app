@@ -6,3 +6,4 @@ defusedxml==0.7.1
 reportlab==4.2.5
 arabic-reshaper==3.0.0
 python-bidi==0.4.2
+pypdf==5.9.0

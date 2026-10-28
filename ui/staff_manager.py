@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 import streamlit as st
 
-from core import auth, catalog, docs, imaging, orders, store, notify
+from core import auth, bundles as bundles_core, catalog, docs, imaging, orders, store, notify, training
 from core.ghstore import GhError
 from core.security import FAILED_LOGINS
 from core.validators import clean_text, normalize_support, safe_html
@@ -494,5 +494,137 @@ def screen_backup(user, settings):
         st.caption("Enter your password above to enable restoring.")
 
 
-SCREENS = {"All Orders": screen_all_orders, "Operators": screen_operators, "Items": screen_items, "Categories": screen_categories,
+# ------------------------------------------------------------------ customers (v2.5)
+def screen_customers(user, settings):
+    st.header("Customers")
+    st.caption("Each customer gets a name and a code that YOU create. Only they can open the store while login is required.")
+    req = bool(settings.get("customer_login_required"))
+    st.write("Customer login is **%s**." % ("ON: only customers with a name and code can open the store" if req else "OFF: anyone with the link can open the store"))
+    if st.button("Turn it OFF" if req else "Turn it ON", key="cust_req_btn", use_container_width=True):
+        if not req and not any(c.get("active", True) for c in store.customers()):
+            st.error("Create at least one active customer first, or nobody (except staff) could open the store.")
+        else:
+            store.save_settings(dict(settings, customer_login_required=not req), "manager"); st.rerun()
+    with st.form("add_cust", clear_on_submit=True):
+        nm = st.text_input("Customer name (this is what the customer types to sign in)", max_chars=40)
+        go = st.form_submit_button("Create customer and code", use_container_width=True)
+    if go:
+        ok, res = auth.add_customer(nm)
+        if ok:
+            st.session_state.new_code = (nm.strip(), res); st.rerun()
+        else:
+            st.error(res)
+    nc = st.session_state.get("new_code")
+    if nc:
+        st.success("Give this to %s now. The code is shown only once." % nc[0])
+        st.code("Name: %s\nCode: %s" % nc, language=None)
+        if st.button("I have saved it", key="code_done"):
+            st.session_state.pop("new_code", None); st.rerun()
+    cs = store.customers()
+    st.write("%d customer(s)." % len(cs))
+    for c in cs:
+        with st.expander("%s%s" % (c["display"], "" if c.get("active", True) else " - inactive")):
+            st.caption("Created %s" % c.get("created", ""))
+            ok = reauth(user, "rc_" + c["id"])
+            a, b, d = st.columns(3)
+            if a.button("New code", key="cr_" + c["id"], use_container_width=True):
+                if ok:
+                    st.session_state.new_code = (c["display"], auth.reset_customer_code(c["id"])); st.rerun()
+                else:
+                    st.error("Enter your password first.")
+            if b.button("Stop" if c.get("active", True) else "Allow", key="ca_" + c["id"], use_container_width=True):
+                auth.set_customer_active(c["id"], not c.get("active", True)); st.rerun()
+            if d.button("Delete", key="cd_" + c["id"], use_container_width=True):
+                if ok:
+                    auth.delete_customer(c["id"]); st.rerun()
+                else:
+                    st.error("Enter your password first.")
+
+
+# ------------------------------------------------------------------ search training (v2.4, approval-only learning in v2.5)
+def screen_training(user, settings):
+    st.header("Search training")
+    st.caption("Teach the intelligent search: synonyms in Arabic / French / English, words that limit the search to a category, "
+               "and customer choices you approve.")
+    cats = store.categories(); cur = store.training_data(); pub = store.public(); L = store.learned()
+    appr4 = training.learn_approved_rows(L, pub["by_no"], with_key=True); appr = [r[:3] for r in appr4]
+    st.write("Saved now: **%d** synonym group(s), **%d** category scope(s), **%d** bundle(s), **%d** default rule(s), **%d** approved choice(s)." %
+             (len(cur.get("groups", [])), len(cur.get("scopes", [])), len(cur.get("bundles", [])), len(cur.get("defaults", [])), len(appr)))
+    c1, c2 = st.columns(2)
+    c1.download_button("Empty template", training.training_xlsx(None, cats), file_name="MY_SHARQ_Training_Template.xlsx", mime=XLSX, use_container_width=True)
+    c2.download_button("Current training", training.training_xlsx(cur, cats, appr), file_name="MY_SHARQ_Training_Current.xlsx", mime=XLSX, use_container_width=True)
+    f = st.file_uploader("Upload a training file (replaces the sheets it contains; approved choices in it are added)", type=["xlsx"], key="tr_up")
+    if f is not None:
+        tr, rep = training.parse_training_file(f.getvalue(), f.name, cats, set(pub["by_no"]))
+        if rep["error"]:
+            st.error(rep["error"])
+        else:
+            st.success("Read %d synonym group(s), %d scope(s), %d bundle(s), %d default rule(s), %d approved choice(s)." %
+                       (rep["groups"], rep["scopes"], rep["bundles"], rep["defaults"], rep["approved"]))
+            for w in rep["warnings"][:25]:
+                st.warning(w)
+            if len(rep["warnings"]) > 25:
+                st.caption("... and %d more." % (len(rep["warnings"]) - 25))
+            if st.button("Save this training", key="tr_save", use_container_width=True):
+                try:
+                    if any(n.strip().lower() in ("synonyms", "scopes", "bundles", "defaults") for n in _sheet_names(f.getvalue())):
+                        store.save_training(tr, "manager")
+                    store.import_approved(tr.get("approved", []), "manager")
+                    st.success("Saved. The search uses it within about a minute."); st.rerun()
+                except GhError:
+                    st.error("Could not save. Please try again.")
+    st.subheader("Try the search")
+    q = st.text_input("Type what a customer might type", key="tr_try", max_chars=120)
+    if q.strip():
+        for _, b in bundles_core.find(pub, q):
+            fx, ch = bundles_core.resolve(pub, b)
+            st.write("**Bundle: %s** - %d fixed item(s), %d choice(s)" % (b["name"], len(fx), len(ch)))
+        res, mode, info = catalog.smart_search_ex(pub, q, 5)
+        if info["default"]:
+            st.caption("Default rule applied: items with %s are hidden." % ", ".join(info["default"]))
+        if info["scope"]:
+            st.caption("Limited to: " + " > ".join(info["scope"]))
+        if info["learned"]:
+            st.caption("Uses an approved customer choice.")
+        for it in res:
+            st.write("**%s**  %s" % (it["item_no"], it["description"]))
+        if not res:
+            st.info("Nothing found.")
+    st.subheader("Customer choices waiting for your approval")
+    st.caption("When a customer fixes a line, the app remembers it here. Nothing is used until you approve it, "
+               "even if many customers chose the same item. Approved choices go into the training Excel (sheet Approved).")
+    pend = training.learn_pending(L)
+    if not pend:
+        st.write("Nothing waiting.")
+    for i, (key, no, e) in enumerate(pend[:20]):
+        d = pub["by_no"].get(no)
+        st.markdown("**%s**  \u2192  %s  %s<br><span style='opacity:.7'>chosen %d time(s) by %d customer(s)</span>" %
+                    (safe_html(e.get("w") or key), safe_html(no), safe_html(d["description"] if d else "(item no longer exists)"),
+                     e.get("n", 1), len(e.get("s", ()))), unsafe_allow_html=True)
+        a, b = st.columns(2)
+        if a.button("Approve", key="lp_ok_%d" % i, use_container_width=True):
+            store.decide_learned(key, no, True, "manager"); st.rerun()
+        if b.button("Reject", key="lp_no_%d" % i, use_container_width=True):
+            store.decide_learned(key, no, False, "manager"); st.rerun()
+    if len(pend) > 20:
+        st.caption("%d more waiting." % (len(pend) - 20))
+    if appr:
+        with st.expander("Approved choices (%d)" % len(appr)):
+            for i, (w, no, desc, key) in enumerate(appr4[:40]):
+                x, y = st.columns([3, 1])
+                x.write("%s \u2192 %s" % (w, no))
+                if y.button("Forget", key="lf_%d" % i):
+                    store.forget_learned(key, no, "manager"); st.rerun()
+
+
+def _sheet_names(data):
+    try:
+        import io as _io
+        from openpyxl import load_workbook
+        return load_workbook(_io.BytesIO(data), read_only=True).sheetnames
+    except Exception:
+        return []
+
+
+SCREENS = {"All Orders": screen_all_orders, "Operators": screen_operators, "Items": screen_items, "Categories": screen_categories, "Training": screen_training, "Customers": screen_customers,
            "Settings": screen_settings, "Export": screen_export, "Backup": screen_backup, "Activity": screen_activity}

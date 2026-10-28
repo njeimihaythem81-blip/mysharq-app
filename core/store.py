@@ -4,7 +4,7 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from . import catalog, config
+from . import catalog, config, training
 from .cache import CACHE
 from .ghstore import Conflict, GhError, NotFound, Repo
 from .validators import item_key, new_order_id
@@ -15,7 +15,7 @@ DEFAULT_SETTINGS = {
     "timezone": "Africa/Tripoli", "overlay_opacity": 0.76, "global_orders_per_hour": 60,
     "whatsapp_reply_template": "Hello {customer_name}, this is {operator_name} (Sales Operator) from {store_name} "
                                "regarding your order {order_id}.",
-    "leaderboard_reset_at": None,
+    "leaderboard_reset_at": None, "customer_login_required": False,
 }
 
 
@@ -86,7 +86,64 @@ def items():
 
 def public():
     """Customer view of the catalogue: availability only, quantities are removed."""
-    return CACHE.get("d:public", 60, lambda: catalog.build_public(items(), categories()))
+    return CACHE.get("d:public", 60, lambda: catalog.build_public(
+        items(), categories(), training.compile_training(training_data()), training.learn_active(learned())))
+
+
+# ---- search training (v2.4): training.json = synonyms + scopes from the manager's Excel; learned.json = customer choices
+def training_data():
+    return CACHE.get("d:training", 60, lambda: _read(ctx().data, "training.json", {"groups": [], "scopes": []}))
+
+
+def save_training(train, actor):
+    train = {k: v for k, v in train.items() if k != "approved"}          # approved pairs live in learned.json
+    ctx().data.commit_files({"training.json": _j(train)}, "%s|training|training" % actor)
+    CACHE.invalidate("d:")
+
+
+def learned():
+    return CACHE.get("d:learned", 60, lambda: _read(ctx().data, "learned.json", {"q": {}}))
+
+
+def _mutate_learned(fn, actor, action, tries=3):
+    """Read-modify-write learned.json with the file's SHA; retried when two sessions write at the same moment."""
+    for _ in range(tries):
+        try:
+            cur, sha = ctx().data.get_json("learned.json")
+        except NotFound:
+            cur, sha = {"q": {}}, None
+        res = fn(cur)
+        try:
+            ctx().data.put_file("learned.json", _j(cur), "%s|%s|learned" % (actor, action), sha)
+            CACHE.invalidate("d:")
+            return res
+        except Conflict:
+            continue
+    raise GhError("busy")
+
+
+def record_choices(pairs, sid):
+    """Customer choices (wording, item_no). Best effort: never breaks the customer's flow."""
+    pairs = [(w, n) for w, n in pairs if w and n][:40]
+    if not pairs:
+        return 0
+    return _mutate_learned(lambda cur: training.learn_add(cur, pairs, sid), "customer", "choices")
+
+
+def decide_learned(key, no, approve, actor):
+    return _mutate_learned(lambda cur: training.learn_decide(cur, key, no, approve), actor, "approve" if approve else "reject")
+
+
+def import_approved(pairs, actor):
+    """Approved wording -> item pairs from the training Excel become approved choices."""
+    pairs = [(w, n) for w, n in pairs if w and n]
+    if not pairs:
+        return 0
+    return _mutate_learned(lambda cur: training.learn_import_approved(cur, pairs), actor, "import-approved")
+
+
+def forget_learned(key, no, actor):
+    return _mutate_learned(lambda cur: training.learn_forget(cur, key, no), actor, "forget")
 
 
 BACKUP_KEEP = 10
@@ -228,6 +285,32 @@ def mutate_users(fn, actor, action):
         except Conflict:
             time.sleep(0.3)
     raise GhError("Could not update, please retry")
+
+
+# ---- customer accounts (v2.5): the manager creates a name + code for each customer
+def customers():
+    return CACHE.get("d:customers", 20, lambda: _read(ctx().data, "customers.json", {"customers": []})["customers"])
+
+
+def mutate_customers(fn, actor, action):
+    for _ in range(4):
+        try:
+            d, sha = ctx().data.get_json("customers.json")
+        except NotFound:
+            d, sha = {"customers": []}, None
+        fn(d["customers"])
+        try:
+            ctx().data.put_file("customers.json", _j(d), "%s|%s|customers" % (actor, action), sha)
+            CACHE.invalidate("d:customers")
+            return
+        except Conflict:
+            time.sleep(0.3)
+    raise GhError("Could not update, please retry")
+
+
+def find_customer(cid):
+    c = (cid or "").strip().lower()
+    return next((x for x in customers() if x["id"] == c), None)
 
 
 def find_user(username):

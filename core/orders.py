@@ -43,7 +43,7 @@ def build_lines(basket, pub):
     return lines
 
 
-def submit(basket, name, phone, project, session_id, ip, honeypot, form_started, now=None):
+def submit(basket, name, phone, project, session_id, ip, honeypot, form_started, now=None, account=None):
     """-> (ok, message, order|None). Generic messages only."""
     now = now if now is not None else time.time()
     if honeypot or (form_started and now - form_started < 3):
@@ -67,6 +67,8 @@ def submit(basket, name, phone, project, session_id, ip, honeypot, form_started,
     order = {"order_id": new_order_id(), "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
              "customer": {"name": nm, "phone": ph}, "project_name": clean_text(project, 80), "lines": lines,
              "opened_by": None, "opened_by_display": None, "opened_at": None, "notified": False}
+    if account:
+        order["account"] = clean_text(account, 40)
     if len(json.dumps(order)) > MAX_PAYLOAD:
         return False, "The order is too large.", None
     try:

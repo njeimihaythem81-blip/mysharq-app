@@ -19,7 +19,7 @@ def availability(qty):
 
 
 # ---------------------------------------------------------------- public view
-def build_public(items, categories):
+def build_public(items, categories, training=None, learned=None):
     pub, level, counts, by_no, index = [], {}, {}, {}, []
     for it in items:
         d = {"item_no": it["item_no"], "description": it["description"], "section": it["section"],
@@ -46,7 +46,8 @@ def build_public(items, categories):
     payload = sorted(([d["item_no"], d["description"][:70], 1 if d["status"] == "Available" else 0] for d in pub),
                      key=lambda r: (search_norm(r[0]), r[0]))
     return {"items": pub, "level": level, "counts": counts, "by_no": by_no, "index": index, "tree": tree, "payload": payload,
-            "smart": build_smart_index(pub)}
+            "smart": build_smart_index(pub), "train": training or {"syn": {}, "phrases": [], "scopes": [], "defaults": [], "bundles": []},
+            "learned": learned or {}}
 
 
 def children(cat, path):
@@ -630,18 +631,27 @@ def _stem(w):
     return w
 
 
+_COMBINING = _re.compile("[\u0300-\u036F]")
+
+
+def _fold(text):
+    """Lower case + strip Latin accents (e -> e, c -> c) so French spellings match; Arabic letters are untouched."""
+    return _COMBINING.sub("", __import__("unicodedata").normalize("NFKD", str(text).lower()))
+
+
 def _tokens(text):
-    return [_ar_norm(t) if _AR_START.match(t) else _stem(t) for t in _TOKEN_RE.findall(str(text).lower())]
+    return [_ar_norm(t) if _AR_START.match(t) else _stem(t) for t in _TOKEN_RE.findall(_fold(text))]
 
 
 def build_smart_index(pub_items):
     """Inverted indexes over description words and category names, built once per catalogue load."""
-    docs, inv_d, inv_c = [], {}, {}
+    docs, inv_d, inv_c, pos = [], {}, {}, {}
     for i, d in enumerate(pub_items):
+        pos[d["item_no"]] = i
         dw = _tokens(d["description"])
         cw = _tokens(" ".join(x for x in (d["section"], d["branch"], d["sub_branch"]) if x))
         docs.append({"no": search_norm(d["item_no"]), "text": search_norm(d["item_no"] + d["description"]),
-                     "avail": d["status"] == "Available", "dlen": len(dw)})
+                     "avail": d["status"] == "Available", "dlen": len(dw), "dtoks": sorted(set(dw))})
         for w in set(dw):
             inv_d.setdefault(w, []).append(i)
         for w in set(cw):
@@ -649,7 +659,7 @@ def build_smart_index(pub_items):
     vocab = sorted(set(inv_d) | set(inv_c))
     n = max(1, len(docs))
     idf = {w: _math.log(1.0 + n / (len(inv_d.get(w, ())) + len(inv_c.get(w, ())) or 1)) for w in vocab}
-    return {"docs": docs, "inv_d": inv_d, "inv_c": inv_c, "vocab": vocab, "vset": set(vocab), "idf": idf}
+    return {"docs": docs, "inv_d": inv_d, "inv_c": inv_c, "vocab": vocab, "vset": set(vocab), "idf": idf, "pos": pos}
 
 
 def _vocab_matches(ix, v):
@@ -674,19 +684,60 @@ def _vocab_matches(ix, v):
     return out
 
 
-def smart_search(cat, query, limit=300):
-    """Relevance search over item number, description and category names. -> (items, mode)
-    mode: 'exact' (every word found), 'closest' (only some words found), 'none'.
-    Item numbers rank first (exact, then prefix, then contained); rarer words weigh more; tolerates plurals,
-    small spelling mistakes, spaces inside units ('25 a'), and Arabic/English synonyms."""
+def _find_seq(toks, seq):
+    """Index where the token sequence `seq` occurs inside `toks`, else -1."""
+    n = len(seq)
+    for k in range(len(toks) - n + 1):
+        if tuple(toks[k:k + n]) == tuple(seq):
+            return k
+    return -1
+
+
+def word_match(tok, w):
+    """A word matches a token when equal, or when the token is a voltage-like code ending with it: '24vdc', '12dc' -> 'dc'; not 'adc', 'dcs'."""
+    return tok == w or (len(tok) > len(w) and tok.endswith(w) and _re.fullmatch(r"\d+[a-z]{0,2}", tok[:-len(w)]) is not None)
+
+
+def learn_key(query):
+    """Normalised form of a query used to remember what customers chose for it."""
+    return " ".join(_tokens(clean_text(query, 120)))
+
+
+def _in_scope(it, path):
+    return tuple(p for p in (it["section"], it["branch"], it["sub_branch"]) if p)[:len(path)] == tuple(path)
+
+
+def smart_search_ex(cat, query, limit=300):
+    """Same as smart_search but also returns details: (items, mode, info).
+    info = {'scope': category path or None, 'scores': {item_no: score}, 'cover': {item_no: fraction of words found}, 'learned': bool}.
+    Training (see core/training.py) adds: extra synonyms, multi-word phrases, and category scopes (a word that limits the search
+    to one section/branch). Learned customer choices rank first."""
     ix, items = cat["smart"], cat["items"]
+    train = cat.get("train") or {}
+    info = {"scope": None, "scores": {}, "cover": {}, "learned": False, "default": None}
     q = clean_text(query, 120)
     if not q:
-        return [], "none"
+        return [], "none", info
     qn = search_norm(q)
     toks = [t for t in _tokens(q) if len(t) > 1 or t.isdigit()]
+    all_toks = list(toks)
+    scope = None
+    for seq, path in train.get("scopes", ()):                  # longest scope words are listed first
+        k = _find_seq(toks, seq)
+        if k >= 0:
+            scope = tuple(path)
+            toks = toks[:k] + toks[k + len(seq):]               # the scope word is satisfied by the category itself
+            break
+    extra = {}                                                 # token -> extra words from the training file
+    for t in toks:
+        if t in train.get("syn", {}):
+            extra.setdefault(t, []).extend(train["syn"][t])
+    for seq, add in train.get("phrases", ()):
+        k = _find_seq(toks, seq)
+        if k >= 0:
+            extra.setdefault(toks[k], []).extend(add)
     scores, covered, by_no = {}, {}, set()
-    if len(qn) >= 2 and all(ord(ch) < 128 for ch in q):      # item numbers are ASCII: an Arabic query must not match them by its digits alone
+    if not scope and len(qn) >= 2 and all(ord(ch) < 128 for ch in q):   # item numbers are ASCII: an Arabic query must not match them by its digits alone
         for i, doc in enumerate(ix["docs"]):
             p = doc["no"].find(qn)
             if p < 0:
@@ -695,7 +746,7 @@ def smart_search(cat, query, limit=300):
             scores[i] = scores.get(i, 0.0) + s; by_no.add(i)
     for t in toks:
         best = {}
-        for rank, v in enumerate([t] + _SYN.get(t, [])):
+        for rank, v in enumerate([t] + _SYN.get(t, []) + extra.get(t, [])):
             f = 1.0 if rank == 0 else 0.7                      # a synonym counts less than the word itself
             for w, qual in _vocab_matches(ix, v).items():
                 wt = ix["idf"][w] * qual * f
@@ -712,6 +763,30 @@ def smart_search(cat, query, limit=300):
         for i in list(scores):
             if qn and qn in ix["docs"][i]["text"]:
                 scores[i] += 40.0
+    lrn = (cat.get("learned") or {}).get(learn_key(q))
+    if lrn:                                                    # what customers chose before for this very wording
+        for no, w in lrn.items():
+            i = ix["pos"].get(no)
+            if i is not None:
+                scores[i] = scores.get(i, 0.0) + 2000.0 + 10.0 * w; by_no.add(i); info["learned"] = True
+    def apply_defaults(ids):
+        """Training 'Defaults': e.g. a contactor is AC unless DC is written -> leave out items containing DC."""
+        for when, unless, exclude in train.get("defaults", ()):
+            if not any(_find_seq(all_toks, w) >= 0 for w in when):
+                continue
+            if any(word_match(t, u) for t in all_toks for u in unless):
+                continue
+            keep = [i for i in ids if not any(word_match(t, e) for t in ix["docs"][i]["dtoks"] for e in exclude)]
+            if keep and len(keep) < len(ids):
+                ids = keep; info["default"] = sorted(exclude)
+        return ids
+
+    if scope and not toks:                                     # only the scope word was typed: show that whole category
+        ids = [i for i, it in enumerate(items) if _in_scope(it, scope)]
+        if ids:
+            info["scope"] = scope
+            ids = apply_defaults(ids)
+            return [items[i] for i in sorted(ids, key=lambda i: items[i]["item_no"])[:limit]], "exact", info
     need = len(toks)
     full = [i for i in scores if i in by_no or (need and covered.get(i, 0) >= need)]
     if full:
@@ -720,11 +795,30 @@ def smart_search(cat, query, limit=300):
         ids, mode = [i for i in scores if covered.get(i, 0) >= 1], "closest"
         ids.sort(key=lambda i: -covered.get(i, 0))
         if not ids:
-            return [], "none"
+            return [], "none", info
     else:
-        return [], "none"
+        return [], "none", info
+    if scope:
+        inside = [i for i in ids if _in_scope(items[i], scope)]
+        if inside:
+            ids, info["scope"] = inside, scope
+    ids = apply_defaults(ids)
     docs = ix["docs"]
     key = (lambda i: (-covered.get(i, 0), -(scores[i] + (1.0 if docs[i]["avail"] else 0.0)), items[i]["item_no"])) if mode == "closest" else \
           (lambda i: (-(scores[i] + (1.0 if docs[i]["avail"] else 0.0) - 0.01 * docs[i]["dlen"]), items[i]["item_no"]))
     ids.sort(key=key)
-    return [items[i] for i in ids[:limit]], mode
+    ids = ids[:limit]
+    for i in ids:
+        no = items[i]["item_no"]
+        info["scores"][no] = scores[i]
+        info["cover"][no] = 1.0 if i in by_no else (covered.get(i, 0) / need if need else 0.0)
+    return [items[i] for i in ids], mode, info
+
+
+def smart_search(cat, query, limit=300):
+    """Relevance search over item number, description and category names. -> (items, mode)
+    mode: 'exact' (every word found), 'closest' (only some words found), 'none'.
+    Item numbers rank first (exact, then prefix, then contained); rarer words weigh more; tolerates plurals,
+    small spelling mistakes, spaces inside units ('25 a'), and Arabic/French/English synonyms."""
+    res, mode, _ = smart_search_ex(cat, query, limit)
+    return res, mode
